@@ -3,6 +3,11 @@ const express = require('express');
 const cors = require('cors');
 const connectDB = require('./config/db');
 
+// Route imports
+const categoryRoutes = require('./routes/categoryRoutes');
+const menuRoutes = require('./routes/menuRoutes');
+const offerRoutes = require('./routes/offerRoutes');
+
 // Initialize Express App
 const app = express();
 
@@ -16,6 +21,11 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// API Routes
+app.use('/api/categories', categoryRoutes);
+app.use('/api/menu', menuRoutes);
+app.use('/api/offers', offerRoutes);
+
 // Health Check Endpoint
 app.get('/api/health', (req, res) => {
   res.status(200).json({
@@ -27,15 +37,28 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Phase 1 Root Status Route
+// Root Status Route
 app.get('/', (req, res) => {
   res.send('RESTOSMART Restaurant Automation API Server is running. Access API endpoints under /api/*');
+});
+
+// 404 Handler for undefined API routes
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: `API route not found: ${req.method} ${req.originalUrl}`,
+  });
 });
 
 // Port configuration
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`🚀 RESTOSMART Server running on port ${PORT}`);
   console.log(`   Health Check: http://localhost:${PORT}/api/health`);
+  console.log(`   Categories API: http://localhost:${PORT}/api/categories`);
+  console.log(`   Menu API: http://localhost:${PORT}/api/menu`);
+  console.log(`   Offers API: http://localhost:${PORT}/api/offers`);
 });
+
+module.exports = { app, server };
