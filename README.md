@@ -1,12 +1,14 @@
-# 🍽️ RESTOSMART – Restaurant Automation System
+# 🍽️ RESTOSMART – Self-Service Restaurant Kiosk & Voice Ordering System
 
-Smarter Dining. Better Experience. A clean, responsive, and lightweight Restaurant Automation System featuring:
-- **Digital Menu & Table QR Ordering** (`/menu?table=7`)
-- **Voice-Based Food Ordering** (Web Speech API + Smart Parser)
-- **Grounded AI Dining Concierge** (Gemini AI RAG assistant)
-- **Table Reservation & Offers Manager**
-- **4-Column Kitchen Display System (KDS)**
-- **Admin Management Dashboard**
+A next-generation **Self-Service Restaurant Ordering Kiosk** (inspired by modern KFC/McDonald's ordering terminals) with **Multilingual Voice-Based Food Ordering as the primary innovative feature**.
+
+### 🌟 Core Highlights
+- **Self-Service Kiosk Experience**: Fast & intuitive ordering screen with Dining Mode (Dine-In Table Picker vs Takeaway/Parcel).
+- **Multilingual Voice-Based Food Ordering**: Natural speech ordering in **English**, **Kannada (ಕನ್ನಡ)**, and **Hindi (हिन्दी)** with extensible support for more regional languages.
+- **Strict Menu Grounding & Quantity Extraction**: Automatically extracts quantities, dishes, and customizations (spice levels, Jain, etc.) strictly grounded against the active kitchen database.
+- **Voice State Machine & Confirmation**: Real-time listening equalizer, confirmation prompts with Text-to-Speech (TTS) voice playback, manual quantity tweaking, and voice confirmation ("Yes, confirm").
+- **Complete Touchscreen Fallback**: Seamless category navigation, popular specials grid, and custom modifier selection for customers who prefer touch.
+- **End-to-End Kitchen & Admin Pipeline**: Real-time 3-stage Kitchen Display System (KDS), Admin Dashboard (Orders, Menu, Offers, Reservations), and Cart / Checkout flow.
 
 ---
 

@@ -5,18 +5,28 @@ import { useCart } from '../../context/CartContext';
 
 export const FoodCard = ({ dish, onOpenDetails }) => {
   const { getItemQuantity, addItem, updateQuantity } = useCart();
-  const quantity = getItemQuantity(dish.id);
+  const quantity = getItemQuantity(dish.id || dish._id);
   const isAvailable = dish.isAvailable !== false;
+
+  const fallbackImage = dish.categorySlug === 'beverages'
+    ? 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=600&h=400&fit=crop'
+    : dish.categorySlug === 'desserts'
+    ? 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=600&h=400&fit=crop'
+    : 'https://images.unsplash.com/photo-1630383249896-424e482df921?w=600&h=400&fit=crop';
 
   return (
     <article className={`food-card ${!isAvailable ? 'sold-out' : ''}`}>
       {/* Image Container with Badges */}
       <div className="food-card-img-wrapper" onClick={() => onOpenDetails && onOpenDetails(dish)}>
         <img
-          src={dish.image}
+          src={dish.image || fallbackImage}
           alt={dish.name}
           className="food-card-img"
           loading="lazy"
+          onError={(e) => {
+            e.target.onerror = null;
+            e.target.src = fallbackImage;
+          }}
         />
 
         {/* Top Badges */}

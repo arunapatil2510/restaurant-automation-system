@@ -299,7 +299,7 @@ export const menuItems = [
     isSpecial: false,
     prepTime: "3 min",
     rating: 4.8,
-    image: "https://images.unsplash.com/photo-1541781774459-bb2af2f05b55?w=600&h=400&fit=crop",
+    image: "https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=600&h=400&fit=crop",
     ingredients: ["Khoya / Mawa", "Cardamom Syrup", "Saffron", "Pistachio Garnish"],
     dietaryTags: ["veg", "sweet", "traditional", "popular"]
   },

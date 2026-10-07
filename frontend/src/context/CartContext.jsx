@@ -7,6 +7,7 @@ const CART_STORAGE_KEY = 'restosmart_cart_items';
 const TABLE_STORAGE_KEY = 'restosmart_table_number';
 const COUPON_STORAGE_KEY = 'restosmart_applied_coupon';
 const NOTES_STORAGE_KEY = 'restosmart_cooking_notes';
+const LANG_STORAGE_KEY = 'restosmart_kiosk_lang';
 
 export const CartProvider = ({ children }) => {
   const [items, setItems] = useState(() => {
@@ -25,6 +26,10 @@ export const CartProvider = ({ children }) => {
     } catch {
       return 1;
     }
+  });
+
+  const [kioskLanguage, setKioskLanguage] = useState(() => {
+    return localStorage.getItem(LANG_STORAGE_KEY) || 'en-IN';
   });
 
   const [coupon, setCoupon] = useState(() => {
@@ -48,6 +53,10 @@ export const CartProvider = ({ children }) => {
   useEffect(() => {
     localStorage.setItem(TABLE_STORAGE_KEY, tableNumber.toString());
   }, [tableNumber]);
+
+  useEffect(() => {
+    localStorage.setItem(LANG_STORAGE_KEY, kioskLanguage);
+  }, [kioskLanguage]);
 
   useEffect(() => {
     if (coupon) {
@@ -155,6 +164,8 @@ export const CartProvider = ({ children }) => {
         items,
         tableNumber,
         setTableNumber,
+        kioskLanguage,
+        setKioskLanguage,
         addItem,
         updateQuantity,
         removeItem,

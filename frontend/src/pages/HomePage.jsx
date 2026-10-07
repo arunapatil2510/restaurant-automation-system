@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { 
   Utensils, 
   QrCode, 
@@ -14,216 +14,221 @@ import {
   CheckCircle2,
   ChevronRight,
   AlertCircle,
-  RefreshCw
+  RefreshCw,
+  ShoppingBag,
+  Volume2,
+  Globe,
+  Coffee,
+  Plus
 } from 'lucide-react';
-import { getMenuItems, getOffers, getRestaurantInfo } from '../services/menuService';
+import { getCategories, getMenuItems, getOffers, getRestaurantInfo } from '../services/menuService';
 import { FoodCard } from '../components/menu/FoodCard';
 import { DishDetailModal } from '../components/menu/DishDetailModal';
+import { KioskVoiceSection } from '../components/voice/KioskVoiceSection';
+import { VoiceOrderModal } from '../components/voice/VoiceOrderModal';
+import { SUPPORTED_LANGUAGES } from '../utils/multilingualVoiceEngine';
 import { useCart } from '../context/CartContext';
 
 export const HomePage = () => {
-  const { tableNumber, setTableNumber } = useCart();
+  const navigate = useNavigate();
+  const { 
+    tableNumber, 
+    setTableNumber, 
+    totalItems, 
+    totalAmount, 
+    addItem, 
+    kioskLanguage, 
+    setKioskLanguage 
+  } = useCart();
+
   const [restaurant, setRestaurant] = useState(null);
+  const [categories, setCategories] = useState([]);
+  const [allMenuDishes, setAllMenuDishes] = useState([]);
   const [specials, setSpecials] = useState([]);
   const [activeOffers, setActiveOffers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [selectedDish, setSelectedDish] = useState(null);
 
-  const loadHomeData = async () => {
+  // Kiosk UI Options
+  const [diningMode, setDiningMode] = useState('dine_in'); // 'dine_in' or 'takeaway'
+  const [selectedDish, setSelectedDish] = useState(null);
+  const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
+
+  // Touch menu section ref for smooth scrolling
+  const touchMenuRef = useRef(null);
+
+  const loadKioskData = async () => {
     setLoading(true);
     setError(null);
     try {
-      const [restData, items, offers] = await Promise.all([
+      const [restData, cats, items, offers] = await Promise.all([
         getRestaurantInfo(),
-        getMenuItems({ isSpecial: true }),
+        getCategories(),
+        getMenuItems(),
         getOffers(),
       ]);
       setRestaurant(restData);
-      setSpecials(items.filter(i => i.isSpecial));
+      setCategories(cats);
+      setAllMenuDishes(items);
+      setSpecials(items.filter((i) => i.isSpecial || i.categorySlug === 'starters' || i.categorySlug === 'maincourse'));
       setActiveOffers(offers);
     } catch (err) {
-      console.error('Error loading home data from backend:', err);
-      setError('Unable to reach restaurant server. Please verify backend connection.');
+      console.error('Error loading kiosk data:', err);
+      setError('Unable to connect to RESTOSMART kitchen backend. Please verify server status.');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadHomeData();
+    loadKioskData();
   }, []);
 
-  const features = [
-    {
-      icon: <QrCode size={26} className="feature-icon qr-color" />,
-      title: "Table QR Ordering",
-      description: "Scan your table's QR code to browse, customize, and order instantly without waiting for paper menus."
-    },
-    {
-      icon: <Sparkles size={26} className="feature-icon stock-color" />,
-      title: "Live Stock Availability",
-      description: "Always know what is cooking fresh in the kitchen with real-time in-stock and sold-out dish indicators."
-    },
-    {
-      icon: <Mic size={26} className="feature-icon voice-color" />,
-      title: "Voice-Powered Ordering",
-      description: "Speak naturally to place your order with hands-free speech recognition and instant dish extraction."
-    },
-    {
-      icon: <Clock size={26} className="feature-icon track-color" />,
-      title: "Real-Time Kitchen Tracking",
-      description: "Follow your meal's progress step-by-step from kitchen preparation to table delivery."
+  const currentLang = SUPPORTED_LANGUAGES.find((l) => l.code === selectedLanguage) || SUPPORTED_LANGUAGES[0];
+
+  const scrollToTouchMenu = () => {
+    if (touchMenuRef.current) {
+      touchMenuRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  ];
+  };
 
   return (
-    <div className="home-page-container">
+    <div className="kiosk-home-container">
+      {/* 1. TOP KIOSK HEADER BANNER */}
+      <section className="kiosk-top-banner">
+        <div className="container kiosk-top-inner">
+          {/* Restaurant Branding & Station info */}
+          <div className="kiosk-branding-col">
+            <div className="kiosk-brand-icon-box">
+              <Utensils size={28} />
+            </div>
+            <div>
+              <div className="kiosk-terminal-pill">
+                <span className="live-dot" /> SELF-SERVICE ORDERING KIOSK
+              </div>
+              <h1 className="kiosk-brand-title">
+                {restaurant?.name || 'RESTOSMART'}
+              </h1>
+            </div>
+          </div>
+
+          {/* Dining Mode Toggle (Dine-In vs Takeaway) & Table Picker */}
+          <div className="kiosk-dining-controls">
+            <div className="kiosk-mode-toggle">
+              <button
+                className={`kiosk-mode-btn ${diningMode === 'dine_in' ? 'active' : ''}`}
+                onClick={() => setDiningMode('dine_in')}
+              >
+                🍽️ Dine-In (Table #{tableNumber})
+              </button>
+              <button
+                className={`kiosk-mode-btn ${diningMode === 'takeaway' ? 'active' : ''}`}
+                onClick={() => setDiningMode('takeaway')}
+              >
+                🛍️ Takeaway / Parcel
+              </button>
+            </div>
+
+            {diningMode === 'dine_in' && (
+              <div className="kiosk-table-selector">
+                <MapPin size={15} />
+                <span>Table:</span>
+                <select
+                  className="kiosk-table-select"
+                  value={tableNumber}
+                  onChange={(e) => setTableNumber(parseInt(e.target.value, 10))}
+                >
+                  {Array.from({ length: 20 }, (_, i) => i + 1).map((n) => (
+                    <option key={n} value={n}>
+                      Table #{n}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
       {/* API Error Notification */}
       {error && (
         <div className="container" style={{ paddingTop: '1rem' }}>
           <div className="api-error-banner">
             <AlertCircle size={20} />
             <span>{error}</span>
-            <button className="btn btn-sm btn-outline" onClick={loadHomeData}>
-              <RefreshCw size={14} /> Retry
+            <button className="btn btn-sm btn-outline" onClick={loadKioskData}>
+              <RefreshCw size={14} /> Retry Connection
             </button>
           </div>
         </div>
       )}
 
-      {/* 1. Hero Banner */}
-      <section className="hero-section">
-        <div className="container hero-grid">
-          {/* Left Column: Headline & Action Buttons */}
-          <div className="hero-text-content">
-            <div className="hero-badge">
-              <span className="hero-badge-pulse" />
-              <span>Smarter Dining. Better Experience.</span>
-            </div>
+      {/* 2. PRIMARY HERO: MULTILINGUAL KIOSK VOICE SECTION */}
+      <div className="container">
+        <KioskVoiceSection
+          menuItems={allMenuDishes}
+          activeLanguage={kioskLanguage}
+          onLanguageChange={(code) => setKioskLanguage(code)}
+          onOpenTouchMenu={scrollToTouchMenu}
+        />
+      </div>
 
-            <h1 className="hero-title">
-              Effortless Dining, <br />
-              <span className="text-gradient">Automated at Your Table</span>
-            </h1>
-
-            <p className="hero-subtitle">
-              Welcome to <strong>{restaurant?.name || 'RESTOSMART'}</strong>. Scan your table QR code, explore our vibrant digital menu, order by voice or touch, and track your food live.
-            </p>
-
-            {/* Quick Table Seating Pill */}
-            <div className="hero-table-box">
-              <div className="hero-table-label">
-                <MapPin size={16} />
-                <span>Seated at a table?</span>
-              </div>
-              <div className="hero-table-input-group">
-                <span>Table #</span>
-                <select
-                  className="hero-table-select"
-                  value={tableNumber}
-                  onChange={(e) => {
-                    const num = parseInt(e.target.value, 10);
-                    setTableNumber(num);
-                  }}
-                >
-                  {Array.from({ length: 20 }, (_, i) => i + 1).map((n) => (
-                    <option key={n} value={n}>Table {n}</option>
-                  ))}
-                </select>
-                <Link to={`/menu?table=${tableNumber}`} className="btn btn-primary btn-sm">
-                  Go to Menu <ArrowRight size={14} />
-                </Link>
-              </div>
-            </div>
-
-            {/* Hero CTAs */}
-            <div className="hero-action-buttons">
-              <Link to={`/menu?table=${tableNumber}`} className="btn btn-primary btn-lg">
-                <Utensils size={18} /> View Digital Menu
-              </Link>
-              <Link to="/qr-access" className="btn btn-outline btn-lg">
-                <QrCode size={18} /> Table QR Access
-              </Link>
-            </div>
-
-            {/* Micro Stats */}
-            <div className="hero-stats-row">
-              <div className="hero-stat-item">
-                <span className="stat-number">{loading ? '...' : `${specials.length}+`}</span>
-                <span className="stat-label">Chef Specials</span>
-              </div>
-              <div className="hero-stat-divider" />
-              <div className="hero-stat-item">
-                <span className="stat-number">10 min</span>
-                <span className="stat-label">Avg Prep Time</span>
-              </div>
-              <div className="hero-stat-divider" />
-              <div className="hero-stat-item">
-                <span className="stat-number">100%</span>
-                <span className="stat-label">Live Stock Sync</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Right Column: Hero Visual Graphic */}
-          <div className="hero-visual-content">
-            <div className="hero-image-card">
-              <img
-                src="https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&h=650&fit=crop"
-                alt="Restaurant dining experience"
-                className="hero-main-img"
-              />
-              <div className="hero-floating-card top-right">
-                <Flame size={18} color="#f97316" />
-                <div>
-                  <strong>Live Kitchen Active</strong>
-                  <span>Fast prep & serving</span>
-                </div>
-              </div>
-              <div className="hero-floating-card bottom-left">
-                <ShieldCheck size={18} color="#16a34a" />
-                <div>
-                  <strong>100% Contactless</strong>
-                  <span>Order & pay from phone</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 2. Active Offers Ticker Banner */}
+      {/* 4. ACTIVE OFFERS TICKER STRIP */}
       {!loading && activeOffers.length > 0 && (
-        <section className="offers-strip-section">
-          <div className="container">
-            <div className="offers-strip-card">
-              <div className="offers-strip-left">
-                <Tag size={20} className="offer-tag-icon" />
-                <div>
-                  <span className="offer-pill-badge">{activeOffers[0].code}</span>
-                  <strong>{activeOffers[0].title}</strong> – {activeOffers[0].description}
-                </div>
+        <section className="kiosk-offers-strip container">
+          <div className="kiosk-offers-card">
+            <div className="offers-strip-left">
+              <Tag size={20} className="text-primary-color" />
+              <div>
+                <span className="offer-pill-badge">{activeOffers[0].code}</span>
+                <strong>{activeOffers[0].title}</strong> — {activeOffers[0].description}
               </div>
-              <Link to="/offers" className="btn btn-ghost btn-sm">
-                View All Deals <ChevronRight size={16} />
-              </Link>
             </div>
+            <Link to="/offers" className="btn btn-ghost btn-sm">
+              All Deals <ChevronRight size={16} />
+            </Link>
           </div>
         </section>
       )}
 
-      {/* 3. Today's Specials Showcase */}
-      <section className="specials-section section-padding">
-        <div className="container">
-          <div className="section-header">
+      {/* 5. TOUCHSCREEN ORDERING SECTION: CATEGORIES & POPULAR DISHES */}
+      <section className="kiosk-touch-menu-section container" ref={touchMenuRef}>
+        <div className="kiosk-section-header">
+          <div>
             <div className="section-badge">
-              <Flame size={14} /> Chef's Recommendations
+              <Utensils size={14} /> Touch Screen Menu
             </div>
-            <h2 className="section-title">Today's Specials</h2>
+            <h3 className="section-title">Or Browse & Tap to Order</h3>
             <p className="section-subtitle">
-              Hand-crafted dishes prepared with fresh authentic ingredients and traditional spices.
+              Prefer touching the screen? Select any category to view full dishes or tap popular specials below.
             </p>
+          </div>
+          <Link to={`/menu?table=${tableNumber}`} className="btn btn-outline btn-md kiosk-view-full-btn">
+            View All Dishes ({allMenuDishes.length}) <ArrowRight size={16} />
+          </Link>
+        </div>
+
+        {/* Category Touch Tiles */}
+        <div className="kiosk-category-tiles-grid">
+          {categories.map((cat) => (
+            <Link
+              key={cat.slug}
+              to={`/menu?category=${cat.slug}&table=${tableNumber}`}
+              className="kiosk-category-tile"
+            >
+              <div className="kiosk-cat-icon">{cat.icon || '🍽️'}</div>
+              <span className="kiosk-cat-name">{cat.name}</span>
+            </Link>
+          ))}
+        </div>
+
+        {/* Popular Dishes Quick Grid */}
+        <div className="kiosk-specials-wrapper">
+          <div className="specials-title-bar">
+            <div className="specials-badge">
+              <Flame size={16} color="#f97316" />
+              <strong>Chef's Recommended Favorites</strong>
+            </div>
           </div>
 
           {loading ? (
@@ -232,9 +237,9 @@ export const HomePage = () => {
                 <div key={i} className="skeleton-food-card" />
               ))}
             </div>
-          ) : specials.length > 0 ? (
+          ) : (
             <div className="food-grid">
-              {specials.slice(0, 4).map((dish) => (
+              {specials.slice(0, 6).map((dish) => (
                 <FoodCard
                   key={dish.id}
                   dish={dish}
@@ -242,86 +247,90 @@ export const HomePage = () => {
                 />
               ))}
             </div>
-          ) : (
-            <div className="empty-menu-state">
-              <h3>No specials available</h3>
-              <p>Check our full digital menu for our delicious options.</p>
-            </div>
           )}
+        </div>
+      </section>
 
-          <div className="section-cta-center">
-            <Link to={`/menu?table=${tableNumber}`} className="btn btn-primary btn-md">
-              Browse Full Digital Menu <ArrowRight size={16} />
-            </Link>
+      {/* 6. HOW THE KIOSK WORKS IN 4 STEPS */}
+      <section className="kiosk-how-it-works-section container">
+        <div className="section-header text-center">
+          <h3 className="section-title">How Self-Ordering Works</h3>
+          <p className="section-subtitle">4 easy steps to place your meal on the restaurant kiosk</p>
+        </div>
+
+        <div className="kiosk-steps-grid">
+          <div className="kiosk-step-card">
+            <div className="step-badge-num">1</div>
+            <div className="step-icon-wrapper"><Globe size={24} /></div>
+            <h4>Select Language</h4>
+            <p>Pick English, Kannada (ಕನ್ನಡ), or Hindi (हिन्दी) for speech and interface.</p>
+          </div>
+
+          <div className="kiosk-step-card highlight">
+            <div className="step-badge-num">2</div>
+            <div className="step-icon-wrapper"><Mic size={24} /></div>
+            <h4>Speak Food Order</h4>
+            <p>Speak naturally (e.g. <em>"1 Masala Dosa, 2 Cold Coffee"</em>) and customize spice levels.</p>
+          </div>
+
+          <div className="kiosk-step-card">
+            <div className="step-badge-num">3</div>
+            <div className="step-icon-wrapper"><CheckCircle2 size={24} /></div>
+            <h4>Review & Confirm</h4>
+            <p>Say <em>"Yes, confirm"</em> or tap Confirm to instantly add dishes to the kiosk cart.</p>
+          </div>
+
+          <div className="kiosk-step-card">
+            <div className="step-badge-num">4</div>
+            <div className="step-icon-wrapper"><Clock size={24} /></div>
+            <h4>Pay & Kitchen Prep</h4>
+            <p>Proceed to payment, get your order receipt, and watch kitchen live tracking.</p>
           </div>
         </div>
       </section>
 
-      {/* 4. Why RESTOSMART / Features Grid */}
-      <section className="features-section section-padding bg-tint">
-        <div className="container">
-          <div className="section-header">
-            <div className="section-badge">
-              <CheckCircle2 size={14} /> Smart Features
-            </div>
-            <h2 className="section-title">Why Dine with RESTOSMART?</h2>
-            <p className="section-subtitle">
-              We eliminate menu delays, miscommunicated orders, and payment hassles.
-            </p>
-          </div>
-
-          <div className="features-grid">
-            {features.map((feat, idx) => (
-              <div key={idx} className="feature-card">
-                <div className="feature-icon-wrapper">{feat.icon}</div>
-                <h3 className="feature-title">{feat.title}</h3>
-                <p className="feature-text">{feat.description}</p>
+      {/* 7. DOCKED PERSISTENT KIOSK ORDER TRAY (BOTTOM BAR) */}
+      {totalItems > 0 && (
+        <div className="kiosk-docked-order-tray">
+          <div className="container tray-inner">
+            <div className="tray-left">
+              <div className="tray-badge">
+                <ShoppingBag size={22} />
+                <span className="tray-count">{totalItems}</span>
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
+              <div className="tray-summary">
+                <span className="tray-title">Your Kiosk Tray ({diningMode === 'dine_in' ? `Table #${tableNumber}` : 'Takeaway'})</span>
+                <span className="tray-total">Total: <strong>₹{totalAmount}</strong> (incl. 5% GST)</span>
+              </div>
+            </div>
 
-      {/* 5. How It Works Steps */}
-      <section className="how-it-works-section section-padding">
-        <div className="container">
-          <div className="section-header">
-            <h2 className="section-title">4 Simple Steps to Enjoy Your Meal</h2>
-            <p className="section-subtitle">
-              Fast, paperless, and completely in your control.
-            </p>
-          </div>
-
-          <div className="steps-grid">
-            <div className="step-card">
-              <div className="step-number">1</div>
-              <h4 className="step-title">Scan Table QR</h4>
-              <p className="step-desc">Open your phone camera, scan your table code to immediately load the live menu.</p>
-            </div>
-            <div className="step-card">
-              <div className="step-number">2</div>
-              <h4 className="step-title">Select or Voice Order</h4>
-              <p className="step-desc">Browse with filters or speak your order naturally to add dishes to your cart.</p>
-            </div>
-            <div className="step-card">
-              <div className="step-number">3</div>
-              <h4 className="step-title">Review & Pay</h4>
-              <p className="step-desc">Apply discount coupons, add chef cooking notes, and select your payment method.</p>
-            </div>
-            <div className="step-card">
-              <div className="step-number">4</div>
-              <h4 className="step-title">Track Live Prep</h4>
-              <p className="step-desc">Watch your order transition from kitchen preparation to served at your table.</p>
+            <div className="tray-right">
+              <button
+                className="btn btn-outline kiosk-tray-mic-btn"
+                onClick={() => setIsVoiceModalOpen(true)}
+              >
+                <Mic size={16} /> Add More by Voice
+              </button>
+              <Link to="/cart" className="btn btn-primary btn-lg kiosk-tray-pay-btn">
+                <span>Proceed to Pay</span> <ArrowRight size={18} />
+              </Link>
             </div>
           </div>
         </div>
-      </section>
+      )}
 
       {/* Dish Details Modal */}
       <DishDetailModal
         dish={selectedDish}
         isOpen={Boolean(selectedDish)}
         onClose={() => setSelectedDish(null)}
+      />
+
+      {/* Multilingual Voice Order Modal */}
+      <VoiceOrderModal
+        isOpen={isVoiceModalOpen}
+        onClose={() => setIsVoiceModalOpen(false)}
+        menuItems={allMenuDishes}
       />
     </div>
   );

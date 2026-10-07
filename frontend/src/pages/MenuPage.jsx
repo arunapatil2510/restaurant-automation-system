@@ -8,13 +8,16 @@ import {
   Sparkles, 
   UtensilsCrossed,
   AlertCircle,
-  RefreshCw
+  RefreshCw,
+  Mic
 } from 'lucide-react';
 import { getCategories, getMenuItems } from '../services/menuService';
 import { CategoryTabs } from '../components/menu/CategoryTabs';
 import { SearchBar } from '../components/menu/SearchBar';
 import { FoodCard } from '../components/menu/FoodCard';
 import { DishDetailModal } from '../components/menu/DishDetailModal';
+import { VoiceOrderModal } from '../components/voice/VoiceOrderModal';
+import { VoiceOrderButton } from '../components/voice/VoiceOrderButton';
 import { useCart } from '../context/CartContext';
 
 export const MenuPage = () => {
@@ -35,6 +38,9 @@ export const MenuPage = () => {
 
   // Selected dish for popup modal
   const [selectedDish, setSelectedDish] = useState(null);
+
+  // Voice Assistant Modal State
+  const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
 
   // 1. Synchronize table parameter from URL (e.g. /menu?table=7)
   useEffect(() => {
@@ -135,9 +141,18 @@ export const MenuPage = () => {
             <MapPin size={16} className="table-context-icon" />
             <span>Ordering for: <strong>Table #{tableNumber}</strong></span>
           </div>
-          <Link to="/qr-access" className="table-switch-link">
-            Change Table QR
-          </Link>
+          <div className="table-context-actions">
+            <button
+              className="btn-header-voice"
+              onClick={() => setIsVoiceModalOpen(true)}
+              title="Speak to order"
+            >
+              <Mic size={14} /> Voice Order
+            </button>
+            <Link to="/qr-access" className="table-switch-link">
+              Change Table QR
+            </Link>
+          </div>
         </div>
       </div>
 
@@ -146,9 +161,12 @@ export const MenuPage = () => {
         <div className="menu-page-header">
           <h1 className="menu-page-title">Digital Restaurant Menu</h1>
           <p className="menu-page-subtitle">
-            Browse authentic dishes crafted fresh to order. Customize your meal and place orders directly to the kitchen.
+            Browse authentic dishes crafted fresh to order. Customize your meal or use our voice assistant to order instantly.
           </p>
         </div>
+
+        {/* 2. Prominent Voice Ordering Banner */}
+        <VoiceOrderButton onClick={() => setIsVoiceModalOpen(true)} />
 
         {/* API Error State */}
         {error && (
@@ -161,7 +179,7 @@ export const MenuPage = () => {
           </div>
         )}
 
-        {/* 2. Category Scroll Tabs */}
+        {/* 3. Category Scroll Tabs */}
         {!error && (
           <CategoryTabs
             categories={categoriesList}
@@ -170,7 +188,7 @@ export const MenuPage = () => {
           />
         )}
 
-        {/* 3. Search & Filter Bar */}
+        {/* 4. Search & Filter Bar */}
         {!error && (
           <SearchBar
             searchQuery={searchQuery}
@@ -182,7 +200,7 @@ export const MenuPage = () => {
           />
         )}
 
-        {/* 4. Active Filters summary pill row */}
+        {/* 5. Active Filters summary pill row */}
         {(activeCategory !== 'all' || activeType !== 'all' || searchQuery) && !error && (
           <div className="active-filters-bar">
             <span>Showing results for:</span>
@@ -207,7 +225,7 @@ export const MenuPage = () => {
           </div>
         )}
 
-        {/* 5. Food Items Grid */}
+        {/* 6. Food Items Grid */}
         {loading ? (
           <div className="menu-loading-grid">
             {Array.from({ length: 6 }).map((_, i) => (
@@ -239,7 +257,10 @@ export const MenuPage = () => {
         ) : null}
       </div>
 
-      {/* 6. Sticky Bottom Mobile Cart Bar */}
+      {/* 7. Floating Voice Action Button */}
+      <VoiceOrderButton variant="floating" onClick={() => setIsVoiceModalOpen(true)} />
+
+      {/* 8. Sticky Bottom Mobile Cart Bar */}
       {totalItems > 0 && (
         <div className="sticky-mobile-cart-bar">
           <div className="container sticky-cart-content">
@@ -265,6 +286,13 @@ export const MenuPage = () => {
         dish={selectedDish}
         isOpen={Boolean(selectedDish)}
         onClose={() => setSelectedDish(null)}
+      />
+
+      {/* Voice Food Ordering Modal */}
+      <VoiceOrderModal
+        isOpen={isVoiceModalOpen}
+        onClose={() => setIsVoiceModalOpen(false)}
+        menuItems={dishesList}
       />
     </div>
   );

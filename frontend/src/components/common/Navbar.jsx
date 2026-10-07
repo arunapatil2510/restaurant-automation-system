@@ -1,17 +1,32 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Utensils, ShoppingBag, QrCode, Sparkles, Menu as MenuIcon, X, MapPin } from 'lucide-react';
+import { 
+  Utensils, 
+  ShoppingBag, 
+  QrCode, 
+  Sparkles, 
+  Menu as MenuIcon, 
+  X, 
+  MapPin, 
+  Mic, 
+  ShieldAlert,
+  Monitor
+} from 'lucide-react';
 import { useCart } from '../../context/CartContext';
+import { VoiceOrderModal } from '../voice/VoiceOrderModal';
+import { getMenuItems } from '../../services/menuService';
 
 export const Navbar = () => {
   const location = useLocation();
   const { totalItems, tableNumber, setTableNumber } = useCart();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showTablePicker, setShowTablePicker] = useState(false);
+  const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
+  const [menuItems, setMenuItems] = useState([]);
 
   const navLinks = [
-    { path: '/', label: 'Home' },
-    { path: '/menu', label: 'Menu' },
+    { path: '/', label: 'Kiosk Home', icon: <Monitor size={15} /> },
+    { path: '/menu', label: 'Digital Menu', icon: <Utensils size={15} /> },
     { path: '/offers', label: 'Offers', badge: '🔥' },
     { path: '/qr-access', label: 'Table QR', icon: <QrCode size={15} /> },
   ];
@@ -21,17 +36,32 @@ export const Navbar = () => {
     return location.pathname.startsWith(path);
   };
 
+  const handleOpenVoice = async () => {
+    try {
+      if (menuItems.length === 0) {
+        const items = await getMenuItems();
+        setMenuItems(items);
+      }
+    } catch {
+      // Ignored
+    }
+    setIsVoiceModalOpen(true);
+  };
+
   return (
     <header className="navbar-wrapper">
       <div className="container navbar">
-        {/* Brand Logo */}
+        {/* Brand Logo & Kiosk Station Info */}
         <Link to="/" className="nav-brand" onClick={() => setMobileMenuOpen(false)}>
           <div className="nav-logo-icon">
             <Utensils size={20} />
           </div>
           <div className="nav-logo-text">
-            <span className="nav-brand-title">RESTOSMART</span>
-            <span className="nav-brand-subtitle">Smart Dining</span>
+            <div className="nav-brand-title-row">
+              <span className="nav-brand-title">RESTOSMART</span>
+              <span className="nav-kiosk-chip">KIOSK</span>
+            </div>
+            <span className="nav-brand-subtitle">Self-Service Voice Ordering</span>
           </div>
         </Link>
 
@@ -50,8 +80,18 @@ export const Navbar = () => {
           ))}
         </nav>
 
-        {/* Right Actions: Table Selector & Cart */}
+        {/* Right Actions: Voice Mic, Table Selector & Cart */}
         <div className="nav-actions">
+          {/* Quick Voice Mic Action */}
+          <button
+            className="nav-voice-quick-btn"
+            onClick={handleOpenVoice}
+            title="Speak your order"
+          >
+            <Mic size={16} />
+            <span className="voice-btn-text">Voice Order</span>
+          </button>
+
           {/* Table Number Pill */}
           <button
             className="table-pill"
@@ -111,14 +151,16 @@ export const Navbar = () => {
       {mobileMenuOpen && (
         <div className="nav-mobile-drawer">
           <div className="mobile-table-info">
-            <span>📍 Currently seated at: <strong>Table #{tableNumber}</strong></span>
-            <Link
-              to="/qr-access"
-              className="btn btn-outline btn-sm"
-              onClick={() => setMobileMenuOpen(false)}
+            <span>📍 Kiosk Station: <strong>Table #{tableNumber}</strong></span>
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={() => {
+                setMobileMenuOpen(false);
+                handleOpenVoice();
+              }}
             >
-              Scan Table QR
-            </Link>
+              <Mic size={14} /> Voice Order
+            </button>
           </div>
           <div className="nav-mobile-links">
             {navLinks.map((link) => (
@@ -137,12 +179,26 @@ export const Navbar = () => {
               className="mobile-nav-link"
               onClick={() => setMobileMenuOpen(false)}
             >
-              <span>View Cart</span>
+              <span>View Order Tray</span>
               <span className="cart-count-pill">{totalItems} items</span>
+            </Link>
+            <Link
+              to="/admin/login"
+              className="mobile-nav-link admin-link"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <span>Admin / Staff Portal</span>
             </Link>
           </div>
         </div>
       )}
+
+      {/* Voice Order Modal */}
+      <VoiceOrderModal
+        isOpen={isVoiceModalOpen}
+        onClose={() => setIsVoiceModalOpen(false)}
+        menuItems={menuItems}
+      />
     </header>
   );
 };

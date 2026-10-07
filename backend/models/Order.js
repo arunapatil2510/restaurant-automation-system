@@ -5,7 +5,7 @@ const OrderItemSchema = new mongoose.Schema(
     menuItemId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'MenuItem',
-      required: true,
+      required: false,
     },
     name: {
       type: String,
@@ -85,7 +85,7 @@ const OrderSchema = new mongoose.Schema(
     },
     paymentMethod: {
       type: String,
-      enum: ['cash', 'upi_demo', 'card_demo', 'upi', 'card'],
+      enum: ['cash', 'upi_demo', 'card_demo', 'upi', 'card', 'pay_at_counter'],
       default: 'cash',
     },
     paymentStatus: {
