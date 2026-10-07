@@ -9,6 +9,7 @@ const menuRoutes = require('./routes/menuRoutes');
 const offerRoutes = require('./routes/offerRoutes');
 const orderRoutes = require('./routes/orderRoutes');
 const kitchenRoutes = require('./routes/kitchenRoutes');
+const reservationRoutes = require('./routes/reservationRoutes');
 
 // Initialize Express App
 const app = express();
@@ -29,6 +30,7 @@ app.use('/api/menu', menuRoutes);
 app.use('/api/offers', offerRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/kitchen', kitchenRoutes);
+app.use('/api/reservations', reservationRoutes);
 
 // Health Check Endpoint
 app.get('/api/health', (req, res) => {
