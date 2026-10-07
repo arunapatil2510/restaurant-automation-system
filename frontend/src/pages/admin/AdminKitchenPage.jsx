@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { ChefHat, Clock, AlertTriangle, CheckCircle2, Flame, RefreshCw, MessageSquare, AlertCircle } from 'lucide-react';
-import { getOrders, updateOrderStatus } from '../../services/orderService';
+import { Clock, CheckCircle2, Flame, RefreshCw, AlertCircle } from 'lucide-react';
+import { getActiveKitchenOrders, updateKitchenOrderStatus } from '../../services/kitchenOrderService';
 
 export const AdminKitchenPage = () => {
   const [orders, setOrders] = useState([]);
@@ -11,8 +11,7 @@ export const AdminKitchenPage = () => {
   const fetchKitchenOrders = async (showLoading = false) => {
     if (showLoading) setLoading(true);
     try {
-      // Get all active orders
-      const data = await getOrders({ limit: 100 });
+      const data = await getActiveKitchenOrders();
       setOrders(data);
       setError(null);
     } catch (err) {
@@ -34,7 +33,7 @@ export const AdminKitchenPage = () => {
   const handleAdvanceStatus = async (orderId, targetStatus) => {
     setUpdatingId(orderId);
     try {
-      await updateOrderStatus(orderId, targetStatus);
+      await updateKitchenOrderStatus(orderId, targetStatus);
       await fetchKitchenOrders(false);
     } catch (err) {
       console.error('Failed to advance kitchen order:', err);
@@ -53,9 +52,14 @@ export const AdminKitchenPage = () => {
     return `${mins} mins ago`;
   };
 
-  const queuedOrders = orders.filter(o => o.orderStatus === 'new');
-  const cookingOrders = orders.filter(o => o.orderStatus === 'preparing');
-  const readyOrders = orders.filter(o => o.orderStatus === 'ready');
+  const queuedOrders = orders.filter(order => order.status === 'Pending');
+  const cookingOrders = orders.filter(order => order.status === 'Preparing');
+  const readyOrders = orders.filter(order => order.status === 'Ready');
+
+  const getItemName = (item) => {
+    if (typeof item === 'string') return item;
+    return item?.name || item?.itemName || item?.title || 'Order item';
+  };
 
   return (
     <div className="admin-page-container">
@@ -69,7 +73,7 @@ export const AdminKitchenPage = () => {
         <div className="kds-header-actions">
           <div className="kds-status-indicator">
             <span className="live-dot" />
-            <span>Station #1 Live (4s sync)</span>
+            <span>Kitchen live · 4s sync</span>
           </div>
           <button className="btn btn-sm btn-outline" onClick={() => fetchKitchenOrders(true)}>
             <RefreshCw size={14} /> Refresh
@@ -88,51 +92,43 @@ export const AdminKitchenPage = () => {
       )}
 
       <div className="kds-board-grid">
-        {/* Column 1: Queued / New */}
+        {/* Column 1: Pending */}
         <div className="kds-column">
           <div className="kds-column-header queue">
-            <h3>1. Queued / Incoming ({queuedOrders.length})</h3>
+            <h3>Pending ({queuedOrders.length})</h3>
           </div>
           <div className="kds-column-body">
             {queuedOrders.length === 0 ? (
-              <div className="kds-empty-col">No incoming tickets in queue</div>
+              <div className="kds-empty-col">{loading ? 'Loading orders...' : 'No pending orders'}</div>
             ) : (
               queuedOrders.map((ticket) => (
-                <div key={ticket._id} className="kds-ticket urgent">
+                <div key={ticket.orderId} className="kds-ticket urgent">
                   <div className="kds-ticket-header">
                     <div>
-                      <span className="ticket-table">Table #{ticket.tableNumber}</span>
-                      <small className="ticket-number">#{ticket.orderNumber}</small>
+                      <span className="ticket-table">Order #{ticket.orderId}</span>
+                      <small className="ticket-number">{ticket.items.length} items</small>
                     </div>
                     <span className="ticket-timer">
-                      <Clock size={13} /> {getElapsedTime(ticket.createdAt)}
+                      <Clock size={13} /> {getElapsedTime(ticket.timestamp)}
                     </span>
                   </div>
 
                   <div className="kds-ticket-items">
-                    {ticket.items.map((it, idx) => (
+                    {ticket.items.map((item, idx) => (
                       <div key={idx} className="kds-item-row">
-                        <span className="kds-qty">{it.quantity}x</span>
-                        <span className="kds-name">{it.name}</span>
-                        <span className={`kds-type-dot ${it.type === 'veg' ? 'veg' : 'nonveg'}`} />
+                        <span className="kds-qty">{item?.quantity ? `${item.quantity}x` : ''}</span>
+                        <span className="kds-name">{getItemName(item)}</span>
                       </div>
                     ))}
                   </div>
-
-                  {ticket.notes && (
-                    <div className="kds-notes-box">
-                      <MessageSquare size={12} />
-                      <span>{ticket.notes}</span>
-                    </div>
-                  )}
 
                   <div className="kds-ticket-footer">
                     <button
                       className="btn-kds-action start"
-                      disabled={updatingId === ticket._id}
-                      onClick={() => handleAdvanceStatus(ticket._id, 'preparing')}
+                      disabled={updatingId === ticket.orderId}
+                      onClick={() => handleAdvanceStatus(ticket.orderId, 'Preparing')}
                     >
-                      <Flame size={15} /> Start Cooking
+                      <Flame size={15} /> Start preparing
                     </button>
                   </div>
                 </div>
@@ -141,51 +137,43 @@ export const AdminKitchenPage = () => {
           </div>
         </div>
 
-        {/* Column 2: Cooking / Preparing */}
+        {/* Column 2: Preparing */}
         <div className="kds-column">
           <div className="kds-column-header cooking">
-            <h3>2. Cooking / In Prep ({cookingOrders.length})</h3>
+            <h3>Preparing ({cookingOrders.length})</h3>
           </div>
           <div className="kds-column-body">
             {cookingOrders.length === 0 ? (
-              <div className="kds-empty-col">No active pans cooking</div>
+              <div className="kds-empty-col">{loading ? 'Loading orders...' : 'No orders being prepared'}</div>
             ) : (
               cookingOrders.map((ticket) => (
-                <div key={ticket._id} className="kds-ticket cooking">
+                <div key={ticket.orderId} className="kds-ticket cooking">
                   <div className="kds-ticket-header">
                     <div>
-                      <span className="ticket-table">Table #{ticket.tableNumber}</span>
-                      <small className="ticket-number">#{ticket.orderNumber}</small>
+                      <span className="ticket-table">Order #{ticket.orderId}</span>
+                      <small className="ticket-number">{ticket.items.length} items</small>
                     </div>
                     <span className="ticket-timer">
-                      <Clock size={13} /> {getElapsedTime(ticket.createdAt)}
+                      <Clock size={13} /> {getElapsedTime(ticket.timestamp)}
                     </span>
                   </div>
 
                   <div className="kds-ticket-items">
-                    {ticket.items.map((it, idx) => (
+                    {ticket.items.map((item, idx) => (
                       <div key={idx} className="kds-item-row">
-                        <span className="kds-qty">{it.quantity}x</span>
-                        <span className="kds-name">{it.name}</span>
-                        <span className={`kds-type-dot ${it.type === 'veg' ? 'veg' : 'nonveg'}`} />
+                        <span className="kds-qty">{item?.quantity ? `${item.quantity}x` : ''}</span>
+                        <span className="kds-name">{getItemName(item)}</span>
                       </div>
                     ))}
                   </div>
 
-                  {ticket.notes && (
-                    <div className="kds-notes-box">
-                      <MessageSquare size={12} />
-                      <span>{ticket.notes}</span>
-                    </div>
-                  )}
-
                   <div className="kds-ticket-footer">
                     <button
                       className="btn-kds-action ready"
-                      disabled={updatingId === ticket._id}
-                      onClick={() => handleAdvanceStatus(ticket._id, 'ready')}
+                      disabled={updatingId === ticket.orderId}
+                      onClick={() => handleAdvanceStatus(ticket.orderId, 'Ready')}
                     >
-                      <CheckCircle2 size={15} /> Mark Dishes Ready
+                      <CheckCircle2 size={15} /> Mark ready
                     </button>
                   </div>
                 </div>
@@ -194,32 +182,32 @@ export const AdminKitchenPage = () => {
           </div>
         </div>
 
-        {/* Column 3: Ready for Table Pickup */}
+        {/* Column 3: Ready */}
         <div className="kds-column">
           <div className="kds-column-header ready">
-            <h3>3. Ready for Service ({readyOrders.length})</h3>
+            <h3>Ready ({readyOrders.length})</h3>
           </div>
           <div className="kds-column-body">
             {readyOrders.length === 0 ? (
-              <div className="kds-empty-col">No dishes waiting for pickup</div>
+              <div className="kds-empty-col">{loading ? 'Loading orders...' : 'No ready orders'}</div>
             ) : (
               readyOrders.map((ticket) => (
-                <div key={ticket._id} className="kds-ticket ready">
+                <div key={ticket.orderId} className="kds-ticket ready">
                   <div className="kds-ticket-header">
                     <div>
-                      <span className="ticket-table">Table #{ticket.tableNumber}</span>
-                      <small className="ticket-number">#{ticket.orderNumber}</small>
+                      <span className="ticket-table">Order #{ticket.orderId}</span>
+                      <small className="ticket-number">{ticket.items.length} items</small>
                     </div>
                     <span className="ticket-timer">
-                      <Clock size={13} /> {getElapsedTime(ticket.createdAt)}
+                      <Clock size={13} /> {getElapsedTime(ticket.timestamp)}
                     </span>
                   </div>
 
                   <div className="kds-ticket-items">
-                    {ticket.items.map((it, idx) => (
+                    {ticket.items.map((item, idx) => (
                       <div key={idx} className="kds-item-row">
-                        <span className="kds-qty">{it.quantity}x</span>
-                        <span className="kds-name">{it.name}</span>
+                        <span className="kds-qty">{item?.quantity ? `${item.quantity}x` : ''}</span>
+                        <span className="kds-name">{getItemName(item)}</span>
                       </div>
                     ))}
                   </div>
@@ -227,10 +215,10 @@ export const AdminKitchenPage = () => {
                   <div className="kds-ticket-footer">
                     <button
                       className="btn-kds-action serve"
-                      disabled={updatingId === ticket._id}
-                      onClick={() => handleAdvanceStatus(ticket._id, 'completed')}
+                      disabled={updatingId === ticket.orderId}
+                      onClick={() => handleAdvanceStatus(ticket.orderId, 'Completed')}
                     >
-                      ✓ Served to Table #{ticket.tableNumber}
+                      <CheckCircle2 size={15} /> Complete order
                     </button>
                   </div>
                 </div>

@@ -8,6 +8,7 @@ const categoryRoutes = require('./routes/categoryRoutes');
 const menuRoutes = require('./routes/menuRoutes');
 const offerRoutes = require('./routes/offerRoutes');
 const orderRoutes = require('./routes/orderRoutes');
+const kitchenOrderRoutes = require('./routes/kitchenOrderRoutes');
 const voiceRoutes = require('./routes/voiceRoutes');
 
 // Initialize Express App
@@ -28,6 +29,7 @@ app.use('/api/categories', categoryRoutes);
 app.use('/api/menu', menuRoutes);
 app.use('/api/offers', offerRoutes);
 app.use('/api/orders', orderRoutes);
+app.use('/api/kitchen/orders', kitchenOrderRoutes);
 app.use('/api/voice', voiceRoutes);
 
 // Health Check Endpoint
