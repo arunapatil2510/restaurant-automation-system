@@ -108,4 +108,100 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// Middleware to protect admin menu routes
+const authenticateAdmin = (req, res, next) => {
+  const adminKey = req.headers['x-admin-key'];
+  const secretKey = process.env.ADMIN_SECRET_KEY;
+
+  if (!adminKey || adminKey !== secretKey) {
+    return res.status(401).json({
+      success: false,
+      data: null,
+      message: 'Unauthorized access. Invalid or missing admin key.',
+    });
+  }
+  next();
+};
+
+/**
+ * @route   PATCH /api/menu/:id/availability
+ * @desc    Update a menu item's availability (in-stock / sold-out)
+ * @access  Private (Admin)
+ */
+router.patch('/:id/availability', authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // 1. Validate MongoDB ObjectId format (return 400 for malformed IDs)
+    if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        data: null,
+        message: `Invalid menu item ID format: '${id}'. Must be a 24-character hexadecimal ObjectId.`,
+      });
+    }
+
+    // 2. Reject empty body or non-object
+    if (!req.body || typeof req.body !== 'object' || Object.keys(req.body).length === 0) {
+      return res.status(400).json({
+        success: false,
+        data: null,
+        message: 'Request body cannot be empty.',
+      });
+    }
+
+    // 3. Reject unexpected / arbitrary fields
+    const bodyKeys = Object.keys(req.body);
+    const unpermittedKeys = bodyKeys.filter((k) => k !== 'isAvailable');
+    if (unpermittedKeys.length > 0) {
+      return res.status(400).json({
+        success: false,
+        data: null,
+        message: `Unpermitted field(s) in request body: ${unpermittedKeys.join(', ')}. Only 'isAvailable' is allowed.`,
+      });
+    }
+
+    // 4. Validate that isAvailable is strictly a boolean
+    const { isAvailable } = req.body;
+    if (typeof isAvailable !== 'boolean') {
+      return res.status(400).json({
+        success: false,
+        data: null,
+        message: "'isAvailable' is required and must be a boolean (true or false).",
+      });
+    }
+
+    // 5. Update menu item in MongoDB
+    const updatedItem = await MenuItem.findByIdAndUpdate(
+      id,
+      { $set: { isAvailable } },
+      { new: true, runValidators: true }
+    ).populate('categoryId', 'name slug icon');
+
+    // 6. Return 404 if item does not exist
+    if (!updatedItem) {
+      return res.status(404).json({
+        success: false,
+        data: null,
+        message: `Menu item not found with ID ${id}`,
+      });
+    }
+
+    // 7. Successful response
+    res.status(200).json({
+      success: true,
+      message: `Menu item availability updated to ${isAvailable ? 'available' : 'unavailable'} successfully`,
+      data: updatedItem,
+    });
+  } catch (error) {
+    console.error(`Error updating menu item availability for ${req.params.id}:`, error.message);
+    res.status(500).json({
+      success: false,
+      data: null,
+      message: 'Server error while updating menu item availability',
+    });
+  }
+});
+
 module.exports = router;
+
