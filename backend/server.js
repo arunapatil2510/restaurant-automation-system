@@ -12,6 +12,7 @@ const kitchenRoutes = require('./routes/kitchenRoutes');
 const reservationRoutes = require('./routes/reservationRoutes');
 const aiRoutes = require('./routes/aiRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const voiceRoutes = require('./routes/voiceRoutes');
 
 // Initialize Express App
 const app = express();
@@ -24,7 +25,7 @@ app.use(cors({
   origin: ['http://localhost:5173', 'http://localhost:5174'],
   credentials: true,
 }));
-app.use(express.json());
+app.use(express.json({ limit: '25mb' })); // Support base64 audio payloads
 
 // API Routes
 app.use('/api/categories', categoryRoutes);
@@ -35,6 +36,7 @@ app.use('/api/kitchen', kitchenRoutes);
 app.use('/api/reservations', reservationRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/voice', voiceRoutes);
 
 // Health Check Endpoint
 app.get('/api/health', (req, res) => {
