@@ -11,6 +11,7 @@ const orderRoutes = require('./routes/orderRoutes');
 const kitchenRoutes = require('./routes/kitchenRoutes');
 const reservationRoutes = require('./routes/reservationRoutes');
 const aiRoutes = require('./routes/aiRoutes');
+const adminRoutes = require('./routes/adminRoutes');
 
 // Initialize Express App
 const app = express();
@@ -33,6 +34,7 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/kitchen', kitchenRoutes);
 app.use('/api/reservations', reservationRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Health Check Endpoint
 app.get('/api/health', (req, res) => {
@@ -67,6 +69,7 @@ const server = app.listen(PORT, () => {
   console.log(`   Categories API: http://localhost:${PORT}/api/categories`);
   console.log(`   Menu API: http://localhost:${PORT}/api/menu`);
   console.log(`   Offers API: http://localhost:${PORT}/api/offers`);
+  console.log(`   Admin API: http://localhost:${PORT}/api/admin`);
 });
 
 module.exports = { app, server };
