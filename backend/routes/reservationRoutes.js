@@ -137,4 +137,126 @@ router.get('/', authenticateAdmin, async (req, res) => {
   }
 });
 
+// Helper to query reservation by either MongoDB ObjectId or reservationNumber
+const buildReservationQuery = (idOrNumber) => {
+  const clean = (idOrNumber || '').trim();
+  if (clean.match(/^[0-9a-fA-F]{24}$/)) {
+    return { _id: clean };
+  }
+  return { reservationNumber: clean.toUpperCase() };
+};
+
+/**
+ * @route   PATCH /api/reservations/:id/status
+ * @desc    Update reservation status and/or assigned table (Admin/Staff)
+ * @access  Private (Admin)
+ */
+router.patch('/:id/status', authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // 1. Reject empty body or non-object
+    if (!req.body || typeof req.body !== 'object' || Object.keys(req.body).length === 0) {
+      return res.status(400).json({
+        success: false,
+        data: null,
+        message: 'Request body cannot be empty.',
+      });
+    }
+
+    // 2. Reject arbitrary unpermitted fields
+    const allowedFields = ['status', 'assignedTable'];
+    const bodyFields = Object.keys(req.body);
+    const unpermittedFields = bodyFields.filter((f) => !allowedFields.includes(f));
+    if (unpermittedFields.length > 0) {
+      return res.status(400).json({
+        success: false,
+        data: null,
+        message: `Unpermitted field(s) in request body: ${unpermittedFields.join(', ')}. Allowed fields: ${allowedFields.join(', ')}`,
+      });
+    }
+
+    const { status, assignedTable } = req.body;
+    const updates = {};
+
+    // 3. Validate status (if provided)
+    if (status !== undefined) {
+      const validStatuses = ['pending', 'confirmed', 'cancelled'];
+      if (typeof status !== 'string' || !validStatuses.includes(status.toLowerCase().trim())) {
+        return res.status(400).json({
+          success: false,
+          data: null,
+          message: `Invalid status provided. Allowed values: ${validStatuses.join(', ')}`,
+        });
+      }
+      updates.status = status.toLowerCase().trim();
+    }
+
+    // 4. Validate assignedTable (if provided): must be integer between 1 and 20
+    if (assignedTable !== undefined) {
+      const parsedTable = typeof assignedTable === 'number' ? assignedTable : parseInt(assignedTable, 10);
+      if (!Number.isInteger(parsedTable) || parsedTable < 1 || parsedTable > 20) {
+        return res.status(400).json({
+          success: false,
+          data: null,
+          message: 'assignedTable must be an integer between 1 and 20.',
+        });
+      }
+      updates.assignedTable = parsedTable;
+    }
+
+    // 5. Require at least one valid field to update
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({
+        success: false,
+        data: null,
+        message: 'At least one valid field (status or assignedTable) is required to update.',
+      });
+    }
+
+    // 6. Locate reservation by ObjectId or reservationNumber
+    const query = buildReservationQuery(id);
+    const existingReservation = await Reservation.findOne(query);
+
+    if (!existingReservation) {
+      return res.status(404).json({
+        success: false,
+        data: null,
+        message: `Reservation not found with identifier '${id}'.`,
+      });
+    }
+
+    // 7. Prevent assigning a table to a cancelled reservation
+    const resultingStatus = updates.status !== undefined ? updates.status : existingReservation.status;
+    if (updates.assignedTable !== undefined && resultingStatus === 'cancelled') {
+      return res.status(400).json({
+        success: false,
+        data: null,
+        message: 'Cannot assign a table to a cancelled reservation.',
+      });
+    }
+
+    // 8. Apply updates
+    const updatedReservation = await Reservation.findByIdAndUpdate(
+      existingReservation._id,
+      { $set: updates },
+      { new: true, runValidators: true }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'Reservation updated successfully',
+      data: updatedReservation,
+    });
+  } catch (error) {
+    console.error(`Error updating reservation status for ${req.params.id}:`, error.message);
+    res.status(500).json({
+      success: false,
+      data: null,
+      message: 'Server error while updating reservation status',
+    });
+  }
+});
+
 module.exports = router;
+
