@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { validateCoupon as validateCouponService } from '../services/menuService';
+import { createOrder as createOrderApi } from '../services/orderService';
 
 const CartContext = createContext(null);
 
@@ -7,6 +8,7 @@ const CART_STORAGE_KEY = 'restosmart_cart_items';
 const TABLE_STORAGE_KEY = 'restosmart_table_number';
 const COUPON_STORAGE_KEY = 'restosmart_applied_coupon';
 const NOTES_STORAGE_KEY = 'restosmart_cooking_notes';
+const LAST_ORDER_STORAGE_KEY = 'restosmart_last_order';
 
 export const CartProvider = ({ children }) => {
   const [items, setItems] = useState(() => {
@@ -39,6 +41,27 @@ export const CartProvider = ({ children }) => {
   const [cookingNotes, setCookingNotes] = useState(() => {
     return localStorage.getItem(NOTES_STORAGE_KEY) || '';
   });
+
+  // Track order submission state and last successfully placed order
+  const [orderLoading, setOrderLoading] = useState(false);
+  const [orderError, setOrderError] = useState(null);
+  const [lastPlacedOrder, setLastPlacedOrderState] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem(LAST_ORDER_STORAGE_KEY);
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const setLastPlacedOrder = (order) => {
+    setLastPlacedOrderState(order);
+    if (order) {
+      sessionStorage.setItem(LAST_ORDER_STORAGE_KEY, JSON.stringify(order));
+    } else {
+      sessionStorage.removeItem(LAST_ORDER_STORAGE_KEY);
+    }
+  };
 
   // Sync state to localStorage
   useEffect(() => {
@@ -122,11 +145,20 @@ export const CartProvider = ({ children }) => {
     localStorage.removeItem(NOTES_STORAGE_KEY);
   };
 
-  // Apply Coupon
+  // Apply Coupon with metadata for reactive updates
   const applyCoupon = async (code) => {
     const res = await validateCouponService(code, subtotal);
     if (res.valid) {
-      setCoupon({ code: res.code, discount: res.discount, message: res.message });
+      const couponData = {
+        code: res.code,
+        discount: res.discount,
+        message: res.message,
+        minOrderValue: res.minOrderValue || 0,
+        discountType: res.discountType,
+        discountValue: res.discountValue,
+        maxDiscount: res.maxDiscount || 500,
+      };
+      setCoupon(couponData);
       return { success: true, message: res.message };
     }
     return { success: false, message: res.message };
@@ -139,7 +171,28 @@ export const CartProvider = ({ children }) => {
   // Financial calculations
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
   const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const discount = coupon ? Math.min(coupon.discount, subtotal) : 0;
+
+  // Reactive discount calculation based on live subtotal
+  let discount = 0;
+  let couponWarning = null;
+
+  if (coupon && subtotal > 0) {
+    if (coupon.minOrderValue && subtotal < coupon.minOrderValue) {
+      couponWarning = `Add items worth ₹${coupon.minOrderValue - subtotal} more to use coupon ${coupon.code}.`;
+      discount = 0;
+    } else if (coupon.discountType === 'percentage') {
+      const rawDiscount = (subtotal * (coupon.discountValue || 0)) / 100;
+      const cappedDiscount = coupon.maxDiscount
+        ? Math.min(rawDiscount, coupon.maxDiscount)
+        : rawDiscount;
+      discount = Math.round(Math.min(cappedDiscount, subtotal));
+    } else if (coupon.discountType === 'flat') {
+      discount = Math.min(coupon.discountValue || coupon.discount || 0, subtotal);
+    } else {
+      discount = Math.min(coupon.discount || 0, subtotal);
+    }
+  }
+
   const taxableAmount = Math.max(0, subtotal - discount);
   const tax = Math.round(taxableAmount * 0.05); // 5% GST
   const totalAmount = taxableAmount + tax;
@@ -147,6 +200,64 @@ export const CartProvider = ({ children }) => {
   const getItemQuantity = (itemId) => {
     const found = items.find((i) => i.id === itemId);
     return found ? found.quantity : 0;
+  };
+
+  // Prepare checkout payload matching backend Order schema
+  const prepareOrderPayload = (customerDetails = {}) => {
+    return {
+      tableNumber,
+      customerName: (customerDetails.customerName || '').trim() || 'Dine-in Guest',
+      phone: (customerDetails.phone || '').trim(),
+      items: items.map((item) => ({
+        menuItemId: item.id,
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity,
+        type: item.type || 'veg',
+      })),
+      subtotal,
+      discount,
+      appliedCoupon: coupon && discount > 0 ? coupon.code : '',
+      tax,
+      totalAmount,
+      paymentMethod: customerDetails.paymentMethod || 'cash',
+      paymentStatus:
+        customerDetails.paymentStatus ||
+        (customerDetails.paymentMethod === 'cash' ? 'pending' : 'paid'),
+      notes: (customerDetails.notes !== undefined ? customerDetails.notes : cookingNotes).trim(),
+    };
+  };
+
+  // Place order through backend API
+  const placeOrder = async (customerDetails = {}) => {
+    if (items.length === 0) {
+      const err = 'Cart is empty. Please add items before placing an order.';
+      setOrderError(err);
+      return { success: false, message: err };
+    }
+
+    setOrderLoading(true);
+    setOrderError(null);
+
+    try {
+      const payload = prepareOrderPayload(customerDetails);
+      const res = await createOrderApi(payload);
+
+      if (res && res.success) {
+        const orderData = res.data;
+        setLastPlacedOrder(orderData);
+        clearCart();
+        setOrderLoading(false);
+        return { success: true, order: orderData, message: res.message };
+      }
+
+      throw new Error(res?.message || 'Failed to place order.');
+    } catch (err) {
+      const errMsg = err.message || 'An error occurred while placing the order.';
+      setOrderError(errMsg);
+      setOrderLoading(false);
+      return { success: false, message: errMsg };
+    }
   };
 
   return (
@@ -166,10 +277,17 @@ export const CartProvider = ({ children }) => {
         tax,
         totalAmount,
         coupon,
+        couponWarning,
         applyCoupon,
         removeCoupon,
         cookingNotes,
         setCookingNotes,
+        prepareOrderPayload,
+        placeOrder,
+        orderLoading,
+        orderError,
+        lastPlacedOrder,
+        setLastPlacedOrder,
       }}
     >
       {children}

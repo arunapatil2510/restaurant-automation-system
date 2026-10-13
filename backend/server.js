@@ -7,6 +7,7 @@ const connectDB = require('./config/db');
 const categoryRoutes = require('./routes/categoryRoutes');
 const menuRoutes = require('./routes/menuRoutes');
 const offerRoutes = require('./routes/offerRoutes');
+const orderRoutes = require('./routes/orderRoutes');
 
 // Initialize Express App
 const app = express();
@@ -25,6 +26,7 @@ app.use(express.json());
 app.use('/api/categories', categoryRoutes);
 app.use('/api/menu', menuRoutes);
 app.use('/api/offers', offerRoutes);
+app.use('/api/orders', orderRoutes);
 
 // Health Check Endpoint
 app.get('/api/health', (req, res) => {
@@ -59,6 +61,7 @@ const server = app.listen(PORT, () => {
   console.log(`   Categories API: http://localhost:${PORT}/api/categories`);
   console.log(`   Menu API: http://localhost:${PORT}/api/menu`);
   console.log(`   Offers API: http://localhost:${PORT}/api/offers`);
+  console.log(`   Orders API: http://localhost:${PORT}/api/orders`);
 });
 
 module.exports = { app, server };

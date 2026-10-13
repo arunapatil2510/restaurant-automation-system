@@ -9,6 +9,7 @@ import { Footer } from './components/common/Footer';
 import { HomePage } from './pages/HomePage';
 import { MenuPage } from './pages/MenuPage';
 import { CartPage } from './pages/CartPage';
+import { CheckoutPage } from './pages/CheckoutPage';
 import { OffersPage } from './pages/OffersPage';
 import { QRAccessPage } from './pages/QRAccessPage';
 
@@ -47,6 +48,7 @@ function App() {
               <Route path="/" element={<HomePage />} />
               <Route path="/menu" element={<MenuPage />} />
               <Route path="/cart" element={<CartPage />} />
+              <Route path="/checkout" element={<CheckoutPage />} />
               <Route path="/offers" element={<OffersPage />} />
               <Route path="/qr-access" element={<QRAccessPage />} />
             </Route>

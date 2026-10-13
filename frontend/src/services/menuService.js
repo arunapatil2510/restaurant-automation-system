@@ -134,6 +134,10 @@ export const validateCoupon = async (code, subtotal) => {
         code: offer.code,
         discount: Math.round(discount),
         message: `${offer.title} applied!`,
+        minOrderValue: offer.minOrderValue || 0,
+        discountType: offer.discountType,
+        discountValue: offer.discountValue,
+        maxDiscount: offer.maxDiscount || 500,
       };
     }
     return { valid: false, message: 'Invalid coupon code.' };
