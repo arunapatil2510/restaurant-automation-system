@@ -21,8 +21,29 @@ const app = express();
 connectDB();
 
 // Middleware
+const allowedOrigins = ['http://localhost:5173', 'http://localhost:5174'];
+if (process.env.CLIENT_URL) {
+  const extraOrigins = process.env.CLIENT_URL
+    .split(',')
+    .map((url) => url.trim().replace(/\/+$/, ''))
+    .filter(Boolean);
+  extraOrigins.forEach((url) => {
+    if (!allowedOrigins.includes(url)) {
+      allowedOrigins.push(url);
+    }
+  });
+}
+
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:5174'],
+  origin: (origin, callback) => {
+    // Allow non-browser requests (e.g. server-to-server, curl, Postman) with no origin header
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(null, false);
+  },
   credentials: true,
 }));
 app.use(express.json({ limit: '25mb' })); // Support base64 audio payloads
