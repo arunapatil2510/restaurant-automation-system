@@ -57,10 +57,24 @@ router.post('/', async (req, res) => {
 
     // 2. Process and validate each item securely from the database
     for (const item of items) {
-      if (!item.menuItemId || !item.quantity || item.quantity < 1) {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
         return res.status(400).json({
           success: false,
           message: 'Invalid item data provided in the cart.',
+        });
+      }
+
+      if (typeof item.menuItemId !== 'string' || !/^[0-9a-fA-F]{24}$/.test(item.menuItemId)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid menuItemId format.',
+        });
+      }
+
+      if (typeof item.quantity !== 'number' || !Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > 50) {
+        return res.status(400).json({
+          success: false,
+          message: 'Quantity must be an integer between 1 and 50.',
         });
       }
 
@@ -68,7 +82,7 @@ router.post('/', async (req, res) => {
       if (!menuItem) {
         return res.status(404).json({
           success: false,
-          message: `Menu item not found with ID: ${item.menuItemId}`,
+          message: 'Menu item not found.',
         });
       }
 
@@ -96,16 +110,38 @@ router.post('/', async (req, res) => {
     let discount = 0;
     let validatedCoupon = '';
 
-    if (appliedCoupon) {
+    if (appliedCoupon !== undefined && appliedCoupon !== null && appliedCoupon !== '') {
+      if (typeof appliedCoupon !== 'string') {
+        return res.status(400).json({
+          success: false,
+          message: 'Coupon code must be a string.',
+        });
+      }
+
+      const cleanCoupon = appliedCoupon.trim().toUpperCase();
+      if (cleanCoupon.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Coupon code cannot be empty.',
+        });
+      }
+
       const offer = await Offer.findOne({
-        code: appliedCoupon.toUpperCase().trim(),
+        code: cleanCoupon,
         isActive: true,
       });
 
       if (!offer) {
         return res.status(404).json({
           success: false,
-          message: `Coupon code '${appliedCoupon}' is invalid or expired.`,
+          message: 'Coupon code is invalid or expired.',
+        });
+      }
+
+      if (offer.validUntil && new Date() > new Date(offer.validUntil)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Coupon code has expired.',
         });
       }
 
@@ -170,7 +206,6 @@ router.post('/', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error while creating order',
-      error: error.message,
     });
   }
 });
