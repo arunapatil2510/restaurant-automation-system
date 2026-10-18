@@ -368,17 +368,56 @@ router.patch('/:idOrNumber/status', authenticateAdmin, async (req, res) => {
     }
 
     const query = buildOrderQuery(idOrNumber);
+    const existingOrder = await Order.findOne(query);
+
+    if (!existingOrder) {
+      return res.status(404).json({
+        success: false,
+        data: null,
+        message: `Order not found with identifier '${idOrNumber}'.`,
+      });
+    }
+
+    // Atomic CAS query filter
+    const updateQuery = { ...query };
+
+    // Validate status transition if orderStatus is being updated
+    if (updates.orderStatus) {
+      const currentStatus = existingOrder.orderStatus;
+      const targetStatus = updates.orderStatus;
+
+      if (currentStatus === targetStatus) {
+        return res.status(400).json({
+          success: false,
+          data: null,
+          message: `Order is already in '${targetStatus}' status.`,
+        });
+      }
+
+      const allowedTransitions = Order.ALLOWED_STATUS_TRANSITIONS[currentStatus] || [];
+      if (!allowedTransitions.includes(targetStatus)) {
+        return res.status(400).json({
+          success: false,
+          data: null,
+          message: `Invalid order status transition from '${currentStatus}' to '${targetStatus}'.`,
+        });
+      }
+
+      // Add condition for atomic compare-and-swap
+      updateQuery.orderStatus = currentStatus;
+    }
+
     const updatedOrder = await Order.findOneAndUpdate(
-      query,
+      updateQuery,
       { $set: updates },
       { new: true, runValidators: true }
     );
 
     if (!updatedOrder) {
-      return res.status(404).json({
+      return res.status(409).json({
         success: false,
         data: null,
-        message: `Order not found with identifier '${idOrNumber}'.`,
+        message: 'Order status was modified by another request concurrently. Please refresh and try again.',
       });
     }
 

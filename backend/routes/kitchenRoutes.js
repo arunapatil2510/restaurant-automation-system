@@ -109,17 +109,45 @@ router.patch('/orders/:id/status', async (req, res) => {
 
     const dbStatus = mapStatusToDB(status);
 
+    const existingOrder = await Order.findOne({ orderNumber: orderNumber });
+    if (!existingOrder) {
+      return res.status(404).json({
+        success: false,
+        data: null,
+        message: `Order not found with ID: ${orderNumber}`,
+      });
+    }
+
+    const currentDbStatus = existingOrder.orderStatus;
+
+    if (currentDbStatus === dbStatus) {
+      return res.status(400).json({
+        success: false,
+        data: null,
+        message: `Order is already in '${status}' status.`,
+      });
+    }
+
+    const allowedTransitions = Order.ALLOWED_STATUS_TRANSITIONS[currentDbStatus] || [];
+    if (!allowedTransitions.includes(dbStatus)) {
+      return res.status(400).json({
+        success: false,
+        data: null,
+        message: `Invalid order status transition from '${mapStatusToFrontend(currentDbStatus)}' to '${status}'.`,
+      });
+    }
+
     const updatedOrder = await Order.findOneAndUpdate(
-      { orderNumber: orderNumber },
+      { orderNumber: orderNumber, orderStatus: currentDbStatus },
       { orderStatus: dbStatus },
       { new: true } // Return the updated document
     );
 
     if (!updatedOrder) {
-      return res.status(404).json({
+      return res.status(409).json({
         success: false,
         data: null,
-        message: `Order not found with ID: ${orderNumber}`,
+        message: 'Order status was modified by another request concurrently. Please refresh and try again.',
       });
     }
 

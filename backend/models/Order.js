@@ -115,4 +115,15 @@ const OrderSchema = new mongoose.Schema(
   }
 );
 
-module.exports = mongoose.model('Order', OrderSchema);
+const ALLOWED_STATUS_TRANSITIONS = Object.freeze({
+  new: ['preparing', 'cancelled'],
+  preparing: ['ready', 'cancelled'],
+  ready: ['completed', 'cancelled'],
+  completed: [],
+  cancelled: [],
+});
+
+const Order = mongoose.model('Order', OrderSchema);
+Order.ALLOWED_STATUS_TRANSITIONS = ALLOWED_STATUS_TRANSITIONS;
+
+module.exports = Order;
