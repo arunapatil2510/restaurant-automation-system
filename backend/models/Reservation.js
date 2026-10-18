@@ -62,5 +62,31 @@ const ReservationSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+// Partial compound unique index: prevent double-booking confirmed reservations on the same table, date, and slot
+ReservationSchema.index(
+  { reservationDate: 1, timeSlot: 1, assignedTable: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      status: 'confirmed',
+      assignedTable: { $gt: 0 },
+    },
+  }
+);
 
-module.exports = mongoose.model('Reservation', ReservationSchema);
+const ALLOWED_RESERVATION_TRANSITIONS = Object.freeze({
+  pending: Object.freeze(['confirmed', 'cancelled']),
+  confirmed: Object.freeze(['cancelled']),
+  cancelled: Object.freeze([]),
+});
+
+const Reservation = mongoose.model('Reservation', ReservationSchema);
+Reservation.ALLOWED_RESERVATION_TRANSITIONS = ALLOWED_RESERVATION_TRANSITIONS;
+
+Reservation.on('index', (error) => {
+  if (error) {
+    console.warn(`[Reservation Model] Index build warning: ${error.message}`);
+  }
+});
+
+module.exports = Reservation;

@@ -387,8 +387,8 @@ router.patch('/:id/status', authenticateAdmin, async (req, res) => {
   try {
     const { id } = req.params;
 
-    // 1. Reject empty body or non-object
-    if (!req.body || typeof req.body !== 'object' || Object.keys(req.body).length === 0) {
+    // 1. Reject empty body, non-object, or array
+    if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body) || Object.keys(req.body).length === 0) {
       return res.status(400).json({
         success: false,
         data: null,
@@ -411,42 +411,7 @@ router.patch('/:id/status', authenticateAdmin, async (req, res) => {
     const { status, assignedTable } = req.body;
     const updates = {};
 
-    // 3. Validate status (if provided)
-    if (status !== undefined) {
-      const validStatuses = ['pending', 'confirmed', 'cancelled'];
-      if (typeof status !== 'string' || !validStatuses.includes(status.toLowerCase().trim())) {
-        return res.status(400).json({
-          success: false,
-          data: null,
-          message: `Invalid status provided. Allowed values: ${validStatuses.join(', ')}`,
-        });
-      }
-      updates.status = status.toLowerCase().trim();
-    }
-
-    // 4. Validate assignedTable (if provided): must be integer between 1 and 20
-    if (assignedTable !== undefined) {
-      const parsedTable = typeof assignedTable === 'number' ? assignedTable : parseInt(assignedTable, 10);
-      if (!Number.isInteger(parsedTable) || parsedTable < 1 || parsedTable > 20) {
-        return res.status(400).json({
-          success: false,
-          data: null,
-          message: 'assignedTable must be an integer between 1 and 20.',
-        });
-      }
-      updates.assignedTable = parsedTable;
-    }
-
-    // 5. Require at least one valid field to update
-    if (Object.keys(updates).length === 0) {
-      return res.status(400).json({
-        success: false,
-        data: null,
-        message: 'At least one valid field (status or assignedTable) is required to update.',
-      });
-    }
-
-    // 6. Locate reservation by ObjectId or reservationNumber
+    // 3. Locate reservation by ObjectId or reservationNumber
     const query = buildReservationQuery(id);
     const existingReservation = await Reservation.findOne(query);
 
@@ -458,9 +423,94 @@ router.patch('/:id/status', authenticateAdmin, async (req, res) => {
       });
     }
 
-    // 7. Prevent assigning a table to a cancelled reservation
+    // 4. Validate status (if provided) & enforce transition state machine
+    if (status !== undefined) {
+      const validStatuses = ['pending', 'confirmed', 'cancelled'];
+      if (typeof status !== 'string' || !validStatuses.includes(status.toLowerCase().trim())) {
+        return res.status(400).json({
+          success: false,
+          data: null,
+          message: `Invalid status provided. Allowed values: ${validStatuses.join(', ')}`,
+        });
+      }
+
+      const cleanStatus = status.toLowerCase().trim();
+
+      // Reject repeated status transitions (no-ops)
+      if (cleanStatus === existingReservation.status) {
+        return res.status(400).json({
+          success: false,
+          data: null,
+          message: `Reservation is already in '${cleanStatus}' status.`,
+        });
+      }
+
+      // Check allowed status transitions:
+      // pending -> confirmed, cancelled
+      // confirmed -> cancelled
+      // cancelled -> terminal (no transitions allowed)
+      const transitionsMap = Reservation.ALLOWED_RESERVATION_TRANSITIONS || {
+        pending: ['confirmed', 'cancelled'],
+        confirmed: ['cancelled'],
+        cancelled: [],
+      };
+      const allowedTransitions = transitionsMap[existingReservation.status] || [];
+
+      if (!allowedTransitions.includes(cleanStatus)) {
+        return res.status(400).json({
+          success: false,
+          data: null,
+          message: `Invalid status transition from '${existingReservation.status}' to '${cleanStatus}'.`,
+        });
+      }
+
+      updates.status = cleanStatus;
+    }
+
+    // 5. Validate assignedTable (if provided): must be integer between 0 and 20 (0 = unassigned)
+    let parsedTable = undefined;
+    if (assignedTable !== undefined) {
+      if (typeof assignedTable === 'number') {
+        parsedTable = assignedTable;
+      } else if (typeof assignedTable === 'string' && /^\d+$/.test(assignedTable.trim())) {
+        parsedTable = parseInt(assignedTable.trim(), 10);
+      }
+      if (!Number.isInteger(parsedTable) || parsedTable < 0 || parsedTable > 20) {
+        return res.status(400).json({
+          success: false,
+          data: null,
+          message: 'assignedTable must be an integer between 0 and 20.',
+        });
+      }
+      updates.assignedTable = parsedTable;
+    }
+
+    // 6. Require at least one valid field to update
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({
+        success: false,
+        data: null,
+        message: 'At least one valid field (status or assignedTable) is required to update.',
+      });
+    }
+
     const resultingStatus = updates.status !== undefined ? updates.status : existingReservation.status;
-    if (updates.assignedTable !== undefined && resultingStatus === 'cancelled') {
+    let targetTable = updates.assignedTable !== undefined ? updates.assignedTable : existingReservation.assignedTable;
+
+    // 7. Cancellation handling:
+    // - Reject assigning a table to a cancelled reservation
+    // - Automatically reset assignedTable to 0 when cancelling
+    if (resultingStatus === 'cancelled') {
+      if (parsedTable !== undefined && parsedTable > 0) {
+        return res.status(400).json({
+          success: false,
+          data: null,
+          message: 'Cannot assign a table to a cancelled reservation.',
+        });
+      }
+      updates.assignedTable = 0;
+      targetTable = 0;
+    } else if (existingReservation.status === 'cancelled') {
       return res.status(400).json({
         success: false,
         data: null,
@@ -468,12 +518,58 @@ router.patch('/:id/status', authenticateAdmin, async (req, res) => {
       });
     }
 
-    // 8. Apply updates
-    const updatedReservation = await Reservation.findByIdAndUpdate(
-      existingReservation._id,
+    // 8. Pending reservation table prohibition:
+    // Do not permit assigning a table to a pending reservation unless the same request confirms it
+    if (resultingStatus === 'pending' && targetTable > 0) {
+      return res.status(400).json({
+        success: false,
+        data: null,
+        message: 'Cannot assign a table to a pending reservation unless the reservation is confirmed in the same request.',
+      });
+    }
+
+    // 9. Double-booking prevention for confirmed reservations with assigned tables:
+    if (resultingStatus === 'confirmed' && targetTable > 0) {
+      const isSameTableAlreadyHeld =
+        existingReservation.status === 'confirmed' && existingReservation.assignedTable === targetTable;
+
+      if (!isSameTableAlreadyHeld) {
+        const conflictingReservation = await Reservation.findOne({
+          _id: { $ne: existingReservation._id },
+          reservationDate: existingReservation.reservationDate,
+          timeSlot: existingReservation.timeSlot,
+          assignedTable: targetTable,
+          status: 'confirmed',
+        });
+
+        if (conflictingReservation) {
+          return res.status(409).json({
+            success: false,
+            data: null,
+            message: `Table ${targetTable} is already reserved for ${existingReservation.reservationDate} at ${existingReservation.timeSlot}.`,
+          });
+        }
+      }
+    }
+
+    // 10. Atomic CAS Update to prevent race conditions
+    const updatedReservation = await Reservation.findOneAndUpdate(
+      {
+        _id: existingReservation._id,
+        status: existingReservation.status, // CAS: status must not have changed concurrently
+        assignedTable: existingReservation.assignedTable, // CAS: assignedTable must not have changed concurrently
+      },
       { $set: updates },
       { new: true, runValidators: true }
     );
+
+    if (!updatedReservation) {
+      return res.status(409).json({
+        success: false,
+        data: null,
+        message: 'Reservation was modified concurrently. Please refresh and try again.',
+      });
+    }
 
     res.status(200).json({
       success: true,
@@ -481,6 +577,20 @@ router.patch('/:id/status', authenticateAdmin, async (req, res) => {
       data: updatedReservation,
     });
   } catch (error) {
+    if (
+      error.code === 11000 &&
+      (error.keyPattern?.assignedTable ||
+        error.keyValue?.assignedTable ||
+        (typeof error.message === 'string' && error.message.includes('assignedTable')))
+    ) {
+      const conflictTable = req.body.assignedTable;
+      return res.status(409).json({
+        success: false,
+        data: null,
+        message: `Table ${conflictTable} is already reserved for this date and time slot.`,
+      });
+    }
+
     console.error(`Error updating reservation status for ${req.params.id}:`, error.message);
     res.status(500).json({
       success: false,
