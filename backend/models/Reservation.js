@@ -35,6 +35,10 @@ const ReservationSchema = new mongoose.Schema(
     guestCount: {
       type: Number,
       required: [true, 'Guest count is required'],
+      validate: {
+        validator: Number.isInteger,
+        message: '{VALUE} must be an integer',
+      },
       min: [1, 'Must be at least 1 guest'],
       max: [20, 'Maximum 20 guests per online booking'],
     },
