@@ -1,20 +1,22 @@
 /**
  * RESTOSMART Voice Order Natural Language Parser & Menu Grounding Engine
  * Multilingual Support for English (en-IN), Kannada (kn-IN), and Hindi (hi-IN)
- * Extracts quantities, items, dietary customizations, and strictly grounds against the active MongoDB menu.
+ * Extracts quantities, items, dietary customizations, and strictly grounds against active menu.
  */
 
 import {
   MULTILINGUAL_NUMBERS,
   FOOD_TRANSLATIONS,
   extractCustomizations,
-  SUPPORTED_LANGUAGES,
 } from './multilingualVoiceEngine.js';
+import { menuItems as fallbackMenuItems } from '../data/mockData.js';
 
 // Filler conversational words across English, Kannada, Hindi
 const FILLER_PHRASES = [
   // English
+  /^i want to order\s+/i,
   /^i want\s+/i,
+  /^i would like to order\s+/i,
   /^i would like\s+/i,
   /^please give me\s+/i,
   /^give me\s+/i,
@@ -31,21 +33,25 @@ const FILLER_PHRASES = [
   /^also\s+/i,
 
   // Kannada
+  /^ನನಗೆ ಆರ್ಡರ್ ಬೇಕು\s+/i,
   /^ನನಗೆ\s+/i,
   /^ನಮಗೆ\s+/i,
   /^ದಯವಿಟ್ಟು\s+/i,
   /^ಕೊಡಿ\s+/i,
+  /^ಆರ್ಡರ್ ಮಾಡಿ\s+/i,
   /^ಆರ್ಡರ್\s+/i,
   /^ಮತ್ತು\s+/i,
   /^ಜೊತೆಗೆ\s+/i,
 
   // Hindi
+  /^मुझे ऑर्डर करना है\s+/i,
   /^मुझे\s+/i,
   /^हमे\s+/i,
   /^कृपया\s+/i,
   /^दीजिए\s+/i,
   /^लाओ\s+/i,
   /^लाइए\s+/i,
+  /^ऑर्डर\s+/i,
   /^और\s+/i,
 ];
 
@@ -59,25 +65,25 @@ export const cleanTranscript = (text = '') => {
 };
 
 /**
- * Calculates string similarity (Levenshtein distance based score from 0 to 1)
+ * Levenshtein distance for fuzzy string matching
  */
-export const calculateSimilarity = (str1, str2) => {
-  const s1 = str1.toLowerCase().trim();
-  const s2 = str2.toLowerCase().trim();
+export const calculateSimilarity = (s1, s2) => {
+  const str1 = cleanTranscript(s1);
+  const str2 = cleanTranscript(s2);
 
-  if (s1 === s2) return 1.0;
-  if (s1.includes(s2) || s2.includes(s1)) return 0.85;
+  if (str1 === str2) return 1.0;
+  if (str1.length === 0 || str2.length === 0) return 0.0;
 
-  const len1 = s1.length;
-  const len2 = s2.length;
-  const matrix = [];
+  const len1 = str1.length;
+  const len2 = str2.length;
+  const matrix = Array.from({ length: len1 + 1 }, () => Array(len2 + 1).fill(0));
 
-  for (let i = 0; i <= len1; i++) matrix[i] = [i];
+  for (let i = 0; i <= len1; i++) matrix[i][0] = i;
   for (let j = 0; j <= len2; j++) matrix[0][j] = j;
 
   for (let i = 1; i <= len1; i++) {
     for (let j = 1; j <= len2; j++) {
-      const cost = s1[i - 1] === s2[j - 1] ? 0 : 1;
+      const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
       matrix[i][j] = Math.min(
         matrix[i - 1][j] + 1,
         matrix[i][j - 1] + 1,
@@ -144,9 +150,9 @@ export const segmentTranscript = (transcript) => {
       }
     }
 
-    // Clean residual measurement words in English, Kannada, Hindi
+    // Clean residual measurement words
     foodQuery = foodQuery
-      .replace(/^(plates?|portions?|bowls?|glasses?|cups?|orders?|pieces?|ಪ್ಲೇಟ್|ಕಪ್|ಗ್ಲಾಸ್|प्लेट|कप|ग्लास)\s+(of\s+)?/i, '')
+      .replace(/^(plates?|portions?|bowls?|glasses?|cups?|orders?|pieces?|ಪ್ಲೇಟ್|ಕಪ್|ಗ್ಲಾಸ್|ಪ್ಲೇಟ್ಸ್|प्लेट|कप|ग्लास)\s+(of\s+)?/i, '')
       .trim();
 
     if (foodQuery.length >= 1) {
@@ -160,10 +166,11 @@ export const segmentTranscript = (transcript) => {
 const CONVERSATIONAL_STOP_WORDS = new Set([
   'hi', 'hello', 'hey', 'namaste', 'good', 'morning', 'evening',
   'yes', 'yeah', 'yep', 'confirm', 'sure', 'ok', 'okay', 'correct',
-  'no', 'nope', 'cancel', 'stop', 'change',
+  'no', 'nope', 'cancel', 'stop', 'change', 'change it',
+  'nothing', 'nothing else', 'no thanks', 'thats all', "that's all", 'done', 'finish', 'checkout', 'go to cart', 'view cart',
   'thanks', 'thank', 'you', 'please', 'help', 'what', 'can', 'i', 'we',
-  'ಹಾಯ್', 'ಹಲೋ', 'ನಮಸ್ಕಾರ', 'ಹೌದು', 'ಸರಿ', 'ಖಚಿತ', 'ಬೇಡ', 'ಧನ್ಯವಾದ',
-  'हाय', 'हेलो', 'नमस्ते', 'हाँ', 'सही', 'नहीं', 'धन्यवाद', 'मदद'
+  'ಹಾಯ್', 'ಹಲೋ', 'ನಮಸ್ಕಾರ', 'ಹೌದು', 'ಸರಿ', 'ಖಚಿತ', 'ಬೇಡ', 'ಧನ್ಯವಾದ', 'ಸಾಕು', 'ಇನ್ನೇನು ಬೇಡ', 'ಅಷ್ಟೇ', 'ಮುಗಿಯಿತು',
+  'हाय', 'हेलो', 'नमस्ते', 'हाँ', 'सही', 'नहीं', 'धन्यवाद', 'मदद', 'कुछ नहीं', 'और नहीं', 'बस', 'काफी है', 'हो गया'
 ]);
 
 /**
@@ -171,6 +178,7 @@ const CONVERSATIONAL_STOP_WORDS = new Set([
  * Uses multilingual synonym lookup + fuzzy token matching.
  */
 export const matchVoiceOrderWithMenu = (transcript, menuItems = [], langCode = 'en-IN') => {
+  const activeMenu = (menuItems && menuItems.length > 0) ? menuItems : fallbackMenuItems;
   const segments = segmentTranscript(transcript);
   const globalCustomizations = extractCustomizations(transcript);
 
@@ -178,7 +186,7 @@ export const matchVoiceOrderWithMenu = (transcript, menuItems = [], langCode = '
   const unavailableItems = [];
   const unrecognizedItems = [];
 
-  // Sort dictionary keys by length descending to match longest phrases first (e.g. "cold coffee" before "coffee")
+  // Sort dictionary keys by length descending to match longest phrases first
   const sortedTranslationEntries = Object.entries(FOOD_TRANSLATIONS).sort(
     (a, b) => b[0].length - a[0].length
   );
@@ -211,7 +219,7 @@ export const matchVoiceOrderWithMenu = (transcript, menuItems = [], langCode = '
     let bestMatch = null;
     let bestScore = 0;
 
-    for (const item of menuItems) {
+    for (const item of activeMenu) {
       const itemName = item.name.toLowerCase();
 
       // 1. Exact match
@@ -221,7 +229,7 @@ export const matchVoiceOrderWithMenu = (transcript, menuItems = [], langCode = '
         break;
       }
 
-      // 2. Proportional substring score (only for queries >= 3 chars not in stop words)
+      // 2. Proportional substring score
       if (canonicalQuery.length >= 3 && !CONVERSATIONAL_STOP_WORDS.has(canonicalQuery)) {
         if (itemName.includes(canonicalQuery) || (canonicalQuery.length >= 4 && canonicalQuery.includes(itemName))) {
           const minLen = Math.min(itemName.length, canonicalQuery.length);
@@ -267,13 +275,19 @@ export const matchVoiceOrderWithMenu = (transcript, menuItems = [], langCode = '
           reason: 'Currently Sold Out in Kitchen',
         });
       } else {
-        const existing = matchedItems.find((m) => (m.dish.id || m.dish._id) === (bestMatch.id || bestMatch._id));
+        const existing = matchedItems.find((m) => {
+          const mId = m.dish.id || m.dish._id;
+          const bId = bestMatch.id || bestMatch._id;
+          if (mId && bId) return String(mId) === String(bId);
+          return m.dish.name.toLowerCase().trim() === bestMatch.name.toLowerCase().trim();
+        });
         if (existing) {
           existing.quantity += quantity;
           existing.subtotal = existing.quantity * existing.dish.price;
         } else {
           matchedItems.push({
             dish: bestMatch,
+            name: bestMatch.name,
             quantity,
             price: bestMatch.price,
             subtotal: bestMatch.price * quantity,
@@ -306,4 +320,37 @@ export const matchVoiceOrderWithMenu = (transcript, menuItems = [], langCode = '
     customizations: globalCustomizations,
     hasValidItems: matchedItems.length > 0,
   };
+};
+
+/**
+ * Merges newly confirmed items into existing confirmed order items.
+ * If dish is already present, increases quantity and updates subtotal.
+ */
+export const mergeOrderItems = (existingList = [], newItems = []) => {
+  const merged = existingList.map((item) => ({ ...item }));
+  for (const newItem of newItems) {
+    const nId = newItem.dish?.id || newItem.dish?._id || newItem.dish?.name || newItem.name;
+    const existingIndex = merged.findIndex((item) => {
+      const eId = item.dish?.id || item.dish?._id || item.dish?.name || item.name;
+      if (eId && nId) return String(eId) === String(nId);
+      return (
+        (item.dish?.name || item.name || '').toLowerCase().trim() ===
+        (newItem.dish?.name || newItem.name || '').toLowerCase().trim()
+      );
+    });
+
+    if (existingIndex >= 0) {
+      merged[existingIndex].quantity += newItem.quantity;
+      const unitPrice = merged[existingIndex].dish?.price || merged[existingIndex].price || 0;
+      merged[existingIndex].subtotal = unitPrice * merged[existingIndex].quantity;
+      if (newItem.customizations && newItem.customizations.length > 0) {
+        merged[existingIndex].customizations = Array.from(
+          new Set([...(merged[existingIndex].customizations || []), ...newItem.customizations])
+        );
+      }
+    } else {
+      merged.push({ ...newItem });
+    }
+  }
+  return merged;
 };

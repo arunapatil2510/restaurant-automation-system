@@ -5,7 +5,9 @@
  * Seamlessly falls back to Web Speech API and SpeechSynthesis when backend key is unconfigured.
  */
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_BASE = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) ||
+  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) ||
+  'http://localhost:5000/api';
 
 export const SARVAM_SUPPORTED_LANGUAGES = [
   {
@@ -17,10 +19,18 @@ export const SARVAM_SUPPORTED_LANGUAGES = [
     sarvamSttCode: 'en-IN',
     sarvamTtsCode: 'en-IN',
     sarvamVoice: 'meera',
-    greeting: "Hello! Welcome to RESTOSMART. What would you like to order?",
-    askChange: "Okay. What would you like to change?",
-    orderConfirmed: "Perfect! Your order has been confirmed.",
+    greeting: "Welcome! What would you like to order today?",
+    askChange: "Okay. What would you like to order instead?",
+    addedAskAnythingElse: "Added to your order. Would you like anything else?",
+    orderConfirmed: "Added to your order. Would you like anything else?",
+    orderFinalized: "Your order is confirmed. Taking you to the cart to review.",
+    askWhatElse: "What else would you like to order?",
+    itemRejected: "Okay, I won't add that. What would you like instead?",
+    unknownItem: "Sorry, I couldn't find that item on the menu.",
+    tryExample: 'Two Masala Dosa and one Mango Lassi',
     listeningHint: "I'm listening... Speak your order naturally",
+    listeningConfirmHint: "Listening for confirmation... Say 'Yes' or 'No'",
+    listeningAskMoreHint: "Would you like anything else? Say 'Yes' or 'No'"
   },
   {
     code: 'kn-IN',
@@ -31,10 +41,18 @@ export const SARVAM_SUPPORTED_LANGUAGES = [
     sarvamSttCode: 'kn-IN',
     sarvamTtsCode: 'kn-IN',
     sarvamVoice: 'aravind',
-    greeting: "ನಮಸ್ಕಾರ! ರೆಸ್ಟೋಸ್ಮಾರ್ಟ್‌ಗೆ ಸುಸ್ವಾಗತ. ನೀವು ಏನನ್ನು ಆರ್ಡರ್ ಮಾಡಲು ಬಯಸುತ್ತೀರಿ?",
-    askChange: "ಸರಿ. ನೀವು ಏನನ್ನು ಬದಲಾಯಿಸಲು ಬಯಸುತ್ತೀರಿ?",
-    orderConfirmed: "ಉತ್ತಮ! ನಿಮ್ಮ ಆರ್ಡರ್ ಖಚಿತವಾಗಿದೆ.",
+    greeting: "ಸ್ವಾಗತ! ಇಂದು ನೀವು ಏನನ್ನು ಆರ್ಡರ್ ಮಾಡಲು ಬಯಸುತ್ತೀರಿ?",
+    askChange: "ಸರಿ. ನೀವು ಏನನ್ನು ಆರ್ಡರ್ ಮಾಡಲು ಬಯಸುತ್ತೀರಿ?",
+    addedAskAnythingElse: "ನಿಮ್ಮ ಆರ್ಡರ್‌ಗೆ ಸೇರಿಸಲಾಗಿದೆ. ಬೇರೆ ಏನಾದರೂ ಬೇಕೇ?",
+    orderConfirmed: "ನಿಮ್ಮ ಆರ್ಡರ್‌ಗೆ ಸೇರಿಸಲಾಗಿದೆ. ಬೇರೆ ಏನಾದರೂ ಬೇಕೇ?",
+    orderFinalized: "ನಿಮ್ಮ ಆರ್ಡರ್ ದೃಢೀಕರಿಸಲಾಗಿದೆ. ಕಾರ್ಟ್ ಪರಿಶೀಲಿಸಲು ಕರೆದೊಯ್ಯಲಾಗುತ್ತಿದೆ.",
+    askWhatElse: "ನೀವು ಮತ್ತೇನು ಆರ್ಡರ್ ಮಾಡಲು ಬಯಸುತ್ತೀರಿ?",
+    itemRejected: "ಸರಿ, ಅದನ್ನು ಸೇರಿಸುತ್ತಿಲ್ಲ. ನೀವು ಬದಲಿಗೆ ಏನನ್ನು ಆರ್ಡರ್ ಮಾಡಲು ಬಯಸುತ್ತೀರಿ?",
+    unknownItem: "ಕ್ಷಮಿಸಿ, ಆ ತಿಂಡಿ ನಮ್ಮ ಮೆನುವಿನಲ್ಲಿ ಲಭ್ಯವಿಲ್ಲ.",
+    tryExample: 'ಎರಡು ಮಸಾಲ ದೋಸೆ ಮತ್ತು ಒಂದು ಮ್ಯಾಂಗೋ ಲಸ್ಸಿ',
     listeningHint: "ಕೇಳಿಸಿಕೊಳ್ಳುತ್ತಿದ್ದೇವೆ... ನಿಮ್ಮ ಆರ್ಡರ್ ಹೇಳಿ",
+    listeningConfirmHint: "ದೃಢೀಕರಣಕ್ಕಾಗಿ ಕೇಳಿಸಿಕೊಳ್ಳುತ್ತಿದ್ದೇವೆ... 'ಹೌದು' ಅಥವಾ 'ಬೇಡ' ಎಂದು ಹೇಳಿ",
+    listeningAskMoreHint: "ಬೇರೆ ಏನಾದರೂ ಬೇಕೇ? 'ಹೌದು' ಅಥವಾ 'ಬೇಡ' ಎಂದು ಹೇಳಿ"
   },
   {
     code: 'hi-IN',
@@ -45,10 +63,18 @@ export const SARVAM_SUPPORTED_LANGUAGES = [
     sarvamSttCode: 'hi-IN',
     sarvamTtsCode: 'hi-IN',
     sarvamVoice: 'ananya',
-    greeting: "नमस्ते! रेस्टोस्मार्ट में आपका स्वागत है। आप क्या ऑर्डर करना चाहेंगे?",
-    askChange: "ठीक है। आप क्या बदलना चाहेंगे?",
-    orderConfirmed: "बहुत बढ़िया! आपका ऑर्डर कन्फर्म हो गया है।",
+    greeting: "नमस्ते! आज आप क्या ऑर्डर करना चाहेंगे?",
+    askChange: "ठीक है। आप क्या ऑर्डर करना चाहेंगे?",
+    addedAskAnythingElse: "आपके ऑर्डर में जोड़ दिया गया है। क्या आप कुछ और लेना चाहेंगे?",
+    orderConfirmed: "आपके ऑर्डर में जोड़ दिया गया है। क्या आप कुछ और लेना चाहेंगे?",
+    orderFinalized: "आपका ऑर्डर कन्फर्म हो गया है। कार्ट देखने के लिए ले जा रहे हैं।",
+    askWhatElse: "आप और क्या ऑर्डर करना चाहेंगे?",
+    itemRejected: "ठीक है, इसे नहीं जोड़ेंगे। आप इसके बदले क्या लेना चाहेंगे?",
+    unknownItem: "क्षमा करें, यह व्यंजन हमारे मेनू में उपलब्ध नहीं है।",
+    tryExample: 'दो मसाला डोसा और एक मैंगो लस्सी',
     listeningHint: "सुन रहे हैं... कृपया अपना ऑर्डर बोलें",
+    listeningConfirmHint: "पुष्टि के लिए सुन रहे हैं... 'हाँ' या 'नहीं' कहें",
+    listeningAskMoreHint: "क्या आप कुछ और लेना चाहेंगे? 'हाँ' या 'नहीं' कहें"
   }
 ];
 
@@ -134,7 +160,6 @@ export const speakKioskSpeech = async (text, langCode = 'en-IN', onEndCallback =
     if (res.ok) {
       const data = await res.json();
       if (data.success && data.audioBase64) {
-        // Play Sarvam AI audio WAV stream
         const audioSrc = `data:audio/wav;base64,${data.audioBase64}`;
         const audio = new Audio(audioSrc);
         activeAudioElement = audio;
@@ -154,8 +179,7 @@ export const speakKioskSpeech = async (text, langCode = 'en-IN', onEndCallback =
       }
     }
   } catch (err) {
-    // Expected fallback when SARVAM_API_KEY is not yet active on local server
-    console.debug('Sarvam TTS unavailable, using local browser speech synthesis:', err.message);
+    console.debug('Sarvam TTS fallback:', err.message);
   }
 
   // 2. Fallback: Browser Native SpeechSynthesis
@@ -190,8 +214,7 @@ const fallbackBrowserTTS = (text, langCode = 'en-IN', onEndCallback = null) => {
       if (onEndCallback) onEndCallback();
     };
 
-    utterance.onerror = (e) => {
-      console.warn('Browser SpeechSynthesis error:', e);
+    utterance.onerror = () => {
       if (onEndCallback) onEndCallback();
     };
 

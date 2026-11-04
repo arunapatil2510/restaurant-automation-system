@@ -1,6 +1,7 @@
 import React from 'react';
 import { UtensilsCrossed, Plus, Search, Filter } from 'lucide-react';
 import { menuItems } from '../../data/mockData';
+import { getCulinaryPlaceholder, handleDishImageError } from '../../utils/imagePlaceholder';
 
 export const AdminMenuPage = () => {
   return (
@@ -44,7 +45,12 @@ export const AdminMenuPage = () => {
                 <tr key={dish.id}>
                   <td>
                     <div className="admin-dish-cell">
-                      <img src={dish.image} alt={dish.name} className="admin-dish-thumb" />
+                      <img
+                        src={dish.image || getCulinaryPlaceholder(dish.name, dish.categorySlug, dish.type)}
+                        alt={dish.name}
+                        className="admin-dish-thumb"
+                        onError={(e) => handleDishImageError(e, dish)}
+                      />
                       <div>
                         <strong>{dish.name}</strong>
                         {dish.isSpecial && <span className="dish-special-tag">Special</span>}

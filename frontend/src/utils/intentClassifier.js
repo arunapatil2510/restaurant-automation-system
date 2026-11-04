@@ -1,152 +1,156 @@
 /**
- * RESTOSMART Voice Intent Classification Layer
- * Analyzes spoken user transcript BEFORE passing to the menu parser.
- * Distinguishes Conversational Intents (Greeting, Help, Gratitude, Cancel, Confirm)
- * from actual Food Orders, ensuring normal conversational words are NEVER misidentified as food.
+ * RESTOSMART Voice Intent Classification & Grounded Dialogue System
+ * Accurately routes customer voice commands to appropriate kiosk actions.
  */
 
 import { FOOD_TRANSLATIONS } from './multilingualVoiceEngine.js';
 
 export const INTENT_TYPES = {
-  GREETING: 'greeting',
-  HELP: 'help',
-  GRATITUDE: 'gratitude',
-  CONFIRMATION: 'confirmation',
-  CANCEL: 'cancel',
-  MODIFY: 'modify',
-  DINE_IN: 'dine_in',
-  TAKEAWAY: 'takeaway',
-  FOOD_ORDER: 'food_order',
-  UNKNOWN: 'unknown'
+  FOOD_ORDER: 'FOOD_ORDER',
+  CONFIRMATION: 'CONFIRMATION',
+  CANCEL: 'CANCEL',
+  MODIFY: 'MODIFY',
+  GREETING: 'GREETING',
+  HELP: 'HELP',
+  GRATITUDE: 'GRATITUDE',
+  DINE_IN: 'DINE_IN',
+  TAKEAWAY: 'TAKEAWAY',
+  FINISH_ORDER: 'FINISH_ORDER',
+  ADD_MORE: 'ADD_MORE',
+  UNKNOWN: 'UNKNOWN'
 };
 
-// Conversational Responses per language
+// Conversational responses across English, Kannada, Hindi
 export const INTENT_RESPONSES = {
-  greeting: {
-    'en-IN': "Hello! Welcome to RESTOSMART. What would you like to order?",
+  [INTENT_TYPES.GREETING]: {
+    'en-IN': "Hello! Welcome to RESTOSMART. What would you like to order today?",
     'kn-IN': "ನಮಸ್ಕಾರ! ರೆಸ್ಟೋಸ್ಮಾರ್ಟ್‌ಗೆ ಸುಸ್ವಾಗತ. ನೀವು ಏನನ್ನು ಆರ್ಡರ್ ಮಾಡಲು ಬಯಸುತ್ತೀರಿ?",
-    'hi-IN': "नमस्ते! रेस्टोस्मार्ट में आपका स्वागत है। आप क्या ऑर्डर करना चाहेंगे?"
+    'hi-IN': "नमस्ते! रेस्टोस्मार्ट में आपका स्वागत है। आप क्या खाना चाहेंगे?"
   },
-  help: {
-    'en-IN': "You can say something like 'One Masala Dosa and two Cold Coffees', or tap Browse Menu to see all dishes.",
-    'kn-IN': "ನೀವು 'ಒಂದು ಮಸಾಲ ದೋಸೆ ಮತ್ತು ಎರಡು ಕೋಲ್ಡ್ ಕಾಫಿ' ಎಂದು ಹೇಳಬಹುದು, ಅಥವಾ ಎಲ್ಲಾ ತಿಂಡಿಗಳನ್ನು ನೋಡಲು ಬ್ರೌಸ್ ಮೆನು ಒತ್ತಿರಿ.",
-    'hi-IN': "आप कह सकते हैं 'एक मसाला डोसा और दो कोल्ड कॉफ़ी', या सारे व्यंजन देखने के लिए मेनू ब्राउज़ करें।"
+  [INTENT_TYPES.HELP]: {
+    'en-IN': "You can order directly by speaking your dishes, like 'Two Masala Dosa and one Mango Lassi', or explore our menu below.",
+    'kn-IN': "ನೀವು ನಿಮ್ಮ ತಿಂಡಿಗಳನ್ನು ನೇರವಾಗಿ ಹೇಳಬಹುದು, ಉದಾ: 'ಎರಡು ಮಸಾಲ ದೋಸೆ ಮತ್ತು ಒಂದು ಮ್ಯಾಂಗೋ ಲಸ್ಸಿ'.",
+    'hi-IN': "आप बोलकर ऑर्डर कर सकते हैं, जैसे 'दो मसाला डोसा और एक मैंगो लस्सी', या मेनू देख सकते हैं।"
   },
-  gratitude: {
-    'en-IN': "You're welcome! Is there anything else you'd like to order?",
-    'kn-IN': "ಸ್ವಾಗತ! ನೀವು ಬೇರೆ ಏನಾದರೂ ಆರ್ಡರ್ ಮಾಡಲು ಬಯಸುತ್ತೀರಾ?",
-    'hi-IN': "आपका स्वागत है! क्या आप कुछ और ऑर्डर करना चाहेंगे?"
+  [INTENT_TYPES.GRATITUDE]: {
+    'en-IN': "You're very welcome! Enjoy your meal at RESTOSMART.",
+    'kn-IN': "ಧನ್ಯವಾದಗಳು! ರೆಸ್ಟೋಸ್ಮಾರ್ಟ್‌ನಲ್ಲಿ ರುಚಿಕರ ಊಟವನ್ನು ಆನಂದಿಸಿ.",
+    'hi-IN': "आपका स्वागत है! रेस्टोस्मार्ट में अपने भोजन का आनंद लें।"
   },
-  cancel: {
-    'en-IN': "Okay. What would you like to change?",
-    'kn-IN': "ಸರಿ. ನೀವು ಏನನ್ನು ಬದಲಾಯಿಸಲು ಬಯಸುತ್ತೀರಿ?",
-    'hi-IN': "ठीक है। आप क्या बदलना चाहेंगे?"
+  [INTENT_TYPES.CONFIRMATION]: {
+    'en-IN': "Added to your order. Would you like anything else?",
+    'kn-IN': "ನಿಮ್ಮ ಆರ್ಡರ್‌ಗೆ ಸೇರಿಸಲಾಗಿದೆ. ಬೇರೆ ಏನಾದರೂ ಬೇಕೇ?",
+    'hi-IN': "आपके ऑर्डर में जोड़ दिया गया है। क्या आप कुछ और लेना चाहेंगे?"
   },
-  modify: {
-    'en-IN': "Okay. What would you like to change?",
-    'kn-IN': "ಸರಿ. ನೀವು ಏನನ್ನು ಬದಲಾಯಿಸಲು ಬಯಸುತ್ತೀರಿ?",
-    'hi-IN': "ठीक है। आप क्या बदलना चाहेंगे?"
+  [INTENT_TYPES.FINISH_ORDER]: {
+    'en-IN': "Your order is confirmed. Taking you to the cart to review.",
+    'kn-IN': "ನಿಮ್ಮ ಆರ್ಡರ್ ದೃಢೀಕರಿಸಲಾಗಿದೆ. ಕಾರ್ಟ್ ಪರಿಶೀಲಿಸಲು ಕರೆದೊಯ್ಯಲಾಗುತ್ತಿದೆ.",
+    'hi-IN': "आपका ऑर्डर कन्फर्म हो गया है। कार्ट देखने के लिए ले जा रहे हैं।"
   },
-  unknown: {
-    'en-IN': "I didn't quite catch that. Please tell me what you'd like to eat (e.g. 'One Masala Dosa') or browse the menu.",
-    'kn-IN': "ಸ್ಪಷ್ಟವಾಗಿ ಕೇಳಿಸಲಿಲ್ಲ. ನಿಮ್ಮ ತಿಂಡಿಯನ್ನು ಹೇಳಿ (ಉದಾ: 'ಒಂದು ಮಸಾಲ ದೋಸೆ') ಅಥವಾ ಮೆನು ನೋಡಿ.",
-    'hi-IN': "मैं समझ नहीं पाया। कृपया अपना ऑर्डर बोलें (उदा: 'एक मसाला डोसा') या मेनू देखें।"
+  [INTENT_TYPES.ADD_MORE]: {
+    'en-IN': "What else would you like to order?",
+    'kn-IN': "ನೀವು ಮತ್ತೇನು ಆರ್ಡರ್ ಮಾಡಲು ಬಯಸುತ್ತೀರಿ?",
+    'hi-IN': "आप और क्या ऑर्डर करना चाहेंगे?"
+  },
+  [INTENT_TYPES.CANCEL]: {
+    'en-IN': "Okay. What would you like to order instead?",
+    'kn-IN': "ಸರಿ. ನೀವು ಏನನ್ನು ಆರ್ಡರ್ ಮಾಡಲು ಬಯಸುತ್ತೀರಿ?",
+    'hi-IN': "ठीक है। आप क्या ऑर्डर करना चाहेंगे?"
+  },
+  [INTENT_TYPES.MODIFY]: {
+    'en-IN': "Okay. What would you like to order instead?",
+    'kn-IN': "ಸರಿ. ನೀವು ಏನನ್ನು ಆರ್ಡರ್ ಮಾಡಲು ಬಯಸುತ್ತೀರಿ?",
+    'hi-IN': "ठीक है। आप क्या ऑर्डर करना चाहेंगे?"
+  },
+  [INTENT_TYPES.UNKNOWN]: {
+    'en-IN': "Sorry, I couldn't find that item on the menu.",
+    'kn-IN': "ಕ್ಷಮಿಸಿ, ಆ ತಿಂಡಿ ನಮ್ಮ ಮೆನುವಿನಲ್ಲಿ ಲಭ್ಯವಿಲ್ಲ.",
+    'hi-IN': "क्षमा करें, यह व्यंजन हमारे मेनू में उपलब्ध नहीं है।"
   }
 };
 
-// Intent keyword & pattern dictionaries
 const GREETING_PATTERNS = [
-  // English
-  /^(hi|hello|hey|good morning|good afternoon|good evening|namaste|howdy|whats up|how are you)$/i,
-  /^(hi|hello|hey)\s+(there|assistant|restosmart|kiosk|budd?y|friend)?$/i,
-  // Kannada
+  /^(hi|hello|hey)\s*(there|assistant|restosmart|kiosk|buddy|friend)?$/i,
   /^(ಹಾಯ್|ಹಲೋ|ನಮಸ್ಕಾರ|ನಮಸ್ತೆ|ಶುಭೋದಯ|ಶುಭ ಸಂಜೆ|ಹೇಗಿದ್ದೀರಾ)$/i,
-  // Hindi
   /^(हाय|हेलो|नमस्ते|नमस्कार|सुप्रभात|शुभ संध्या|प्रणाम|कैसे हो|क्या हाल है)$/i
 ];
 
 const HELP_PATTERNS = [
-  // English
-  /^(help|help me|what can i order|what do you have|show menu|what is available|what is on the menu|suggest something|recommend something|i dont know|i do not know|what to eat)$/i,
+  /^(help|help me|what can i order|what do you have|show menu|what is available|what is on the menu|suggest something|recommend something|i dont know|what to eat)$/i,
   /^(how to order|how does this work|menu please|show me the menu)$/i,
-  // Kannada
   /^(ಸಹಾಯ|ಸಹಾಯ ಮಾಡಿ|ಏನು ಆರ್ಡರ್ ಮಾಡಬಹುದು|ಏನಿದೆ|ಮೆನು ತೋರಿಸಿ|ಗೊತ್ತಿಲ್ಲ|ತಿಳಿಸಿ)$/i,
-  // Hindi
   /^(मदद|मदद करो|क्या ऑर्डर कर सकते हैं|क्या है|मेनू दिखाओ|पता नहीं|कुछ बताओ|क्या मिलेगा|क्या खाएं)$/i
 ];
 
 const GRATITUDE_PATTERNS = [
-  // English
   /^(thank you|thanks|thanks a lot|thank you so much|thank you very much|awesome|great|cool|perfect)$/i,
-  // Kannada
   /^(ಧನ್ಯವಾದ|ಧನ್ಯವಾದಗಳು|ಥ್ಯಾಂಕ್ಸ್|ತುಂಬಾ ಧನ್ಯವಾದಗಳು)$/i,
-  // Hindi
   /^(धन्यवाद|शुक्रिया|थैंक यू|बहुत धन्यवाद|बहुत शुक्रिया)$/i
 ];
 
 const CONFIRM_PATTERNS = [
-  // English
-  /^(yes|confirm|yes confirm|confirm order|correct|proceed|place order|done|okay|ok|sure|yep|yeah|thats right|that is right)$/i,
-  // Kannada
-  /^(ಹೌದು|ಸರಿ|ಖಚಿತಪಡಿಸಿ|ಆರ್ಡರ್ ಮಾಡಿ|ಖಚಿತ|ಸರಿಯಾಗಿದೆ|ಹಾ|ಆಯಿತು|yes|confirm)$/i,
-  // Hindi
-  /^(हाँ|हाँ कन्फर्म|कन्फर्म|कन्फर्म करो|सही है|ऑर्डर करो|ठीक है|हाँ ठीक है|yes|confirm)$/i
+  /^(yes|yes please|please|confirm|yes confirm|confirm order|correct|proceed|yes proceed|place order|done|okay|ok|sure|sure please|yep|yeah|thats right|that is right|add it|add them|yes add it|yes add them|add to cart|yes add to cart|haan|haudu|sari|sahi|add more|one more|more|want more)$/i,
+  /^(ಹೌದು|ಸರಿ|ಖಚಿತಪಡಿಸಿ|ಆರ್ಡರ್ ಮಾಡಿ|ಖಚಿತ|ಸರಿಯಾಗಿದೆ|ಹಾ|ಆಯಿತು|ಇನ್ನೊಂದು|ಬೇಕು|yes|confirm)$/i,
+  /^(हाँ|हाँ कन्फर्म|कन्फर्म|कन्फर्म करो|सही है|ऑर्डर करो|ठीक है|हाँ ठीक है|हां|और|और चाहिए|एक और|yes|confirm)$/i
 ];
 
 const CANCEL_PATTERNS = [
-  // English
-  /^(no|cancel|clear|restart|reset|wrong|stop|change|discard|never mind|dont order|cancel order)$/i,
-  // Kannada
-  /^(ಬೇಡ|ರದ್ದು|ತಪ್ಪು|ಮತ್ತೆ|ಬೇಡವೇ ಬೇಡ|ಕ್ಯಾನ್ಸಲ್|ರದ್ದು ಮಾಡಿ)$/i,
-  // Hindi
-  /^(नहीं|रद्द|गलत|वापस|कैंसिल|मत करो|हटाओ|कैंसिल करो|रद्द करो)$/i
-];
-
-const DINE_IN_PATTERNS = [
-  // English
-  /^(dine in|dine-in|table|eat here|eating here|inside|dine in please)$/i,
-  /^table\s*#?\s*(\d+)$/i,
-  // Kannada
-  /^(ಇಲ್ಲೇ ಊಟ|ಡೈನ್ ಇನ್|ಟೇಬಲ್)$/i,
-  // Hindi
-  /^(डाइन इन|यहीं खाएंगे|यही खाएंगे|टेबल)$/i
-];
-
-const TAKEAWAY_PATTERNS = [
-  // English
-  /^(takeaway|take away|take-away|parcel|pack it|to go|packing|takeout)$/i,
-  // Kannada
-  /^(ಪಾರ್ಸೆಲ್|ತೆಗೆದುಕೊಂಡು ಹೋಗಿ|ಪ್ಯಾಕ್ ಮಾಡಿ)$/i,
-  // Hindi
-  /^(टेकअवे|पार्सल|पैक कर दो|ले जाएंगे|पैक)$/i
+  /^(no|cancel|clear|restart|reset|wrong|stop|change|discard|never mind|dont order|cancel order|change it|beda|nahi|nothing|nothing else|no thanks|nope|no more|thats all|that's all|finish|finished|checkout|go to cart|view cart|all done|i am done|im done)$/i,
+  /^(ಬೇಡ|ರದ್ದು|ತಪ್ಪು|ಮತ್ತೆ|ಬೇಡವೇ ಬೇಡ|ಕ್ಯಾನ್ಸಲ್|ರದ್ದು ಮಾಡಿ|ಇನ್ನೇನು ಬೇಡ|ಸಾಕು|ಅಷ್ಟೇ|ಮುಗಿಯಿತು)$/i,
+  /^(नहीं|रद्द|गलत|वापस|कैंसिल|मत करो|हटाओ|कैंसिल करो|रद्द करो|कुछ नहीं|और नहीं|बस|काफी है|काफ़ी है|हो गया)$/i
 ];
 
 const MODIFY_PATTERNS = [
-  // English
-  /^(change|modify|change order|modify order|edit|edit order)$/i,
-  // Kannada
+  /^(change|modify|change order|modify order|edit|edit order|change it)$/i,
   /^(ಬದಲಾಯಿಸಿ|ಬದಲಿಸಿ)$/i,
-  // Hindi
   /^(बदलो|बदलना है|ऑर्डर बदलो)$/i
 ];
 
+export const isAffirmative = (clean = '') => {
+  return CONFIRM_PATTERNS.some(regex => regex.test(clean)) ||
+    /^(yes|yeah|yep|sure|ok|okay|add more|one more|more|want more|confirm|proceed|correct)$/i.test(clean) ||
+    clean === 'yes' || clean === 'haudu' || clean === 'haan' || clean === 'sari' || clean === 'sahi';
+};
+
+export const isNegative = (clean = '') => {
+  return CANCEL_PATTERNS.some(regex => regex.test(clean)) ||
+    /^(no|nope|nothing|nothing else|no thanks|no more|thats all|that's all|done|finish|finished|checkout|go to cart|view cart|all done|i am done|im done|stop|cancel)$/i.test(clean) ||
+    clean === 'no' || clean === 'nahi' || clean === 'beda' || clean === 'saaku' || clean === 'bas' || clean === 'kuch nahi';
+};
+
 /**
  * Classifies spoken transcript into an intent.
- * Checks for non-food conversational intents before any food parsing occurs.
+ * Handles stages: 'CONFIRM_ITEM', 'ASK_MORE', or general order flow.
  */
-export const classifyIntent = (transcript = '', hasPendingOrder = false) => {
+export const classifyIntent = (transcript = '', context = false) => {
   const clean = transcript.toLowerCase().trim().replace(/[.,?!।]/g, ' ').replace(/\s+/g, ' ').trim();
 
   if (!clean) {
     return { type: INTENT_TYPES.UNKNOWN, text: transcript };
   }
 
-  // 1. If customer is in confirmation stage, check confirmation/cancel/modify first
-  if (hasPendingOrder) {
-    if (CONFIRM_PATTERNS.some(regex => regex.test(clean))) {
+  const stage = typeof context === 'string'
+    ? context
+    : (typeof context === 'object' && context !== null ? context.stage : (context ? 'CONFIRM_ITEM' : 'GENERAL'));
+  const hasPendingOrder = typeof context === 'boolean' ? context : Boolean(context?.hasPendingOrder);
+
+  // 1. In ASK_MORE stage ("Added to your order. Would you like anything else?")
+  if (stage === 'ASK_MORE') {
+    if (isNegative(clean)) {
+      return { type: INTENT_TYPES.FINISH_ORDER, text: clean };
+    }
+    if (isAffirmative(clean)) {
+      return { type: INTENT_TYPES.ADD_MORE, text: clean };
+    }
+    // If not yes/no, customer might directly speak next food item!
+  }
+
+  // 2. In CONFIRM_ITEM stage ("Shall I add it to your order?")
+  if (stage === 'CONFIRM_ITEM' || hasPendingOrder) {
+    if (isAffirmative(clean)) {
       return { type: INTENT_TYPES.CONFIRMATION, text: clean };
     }
-    if (CANCEL_PATTERNS.some(regex => regex.test(clean))) {
+    if (isNegative(clean) || clean.includes('change it')) {
       return { type: INTENT_TYPES.CANCEL, text: clean };
     }
     if (MODIFY_PATTERNS.some(regex => regex.test(clean))) {
@@ -154,7 +158,7 @@ export const classifyIntent = (transcript = '', hasPendingOrder = false) => {
     }
   }
 
-  // 2. Greeting & Help Checks (including compound phrases like "Hello what can I order?")
+  // 2. Greeting & Help Checks
   if (
     GREETING_PATTERNS.some(regex => regex.test(clean)) ||
     clean.startsWith('hi ') || 
@@ -194,36 +198,29 @@ export const classifyIntent = (transcript = '', hasPendingOrder = false) => {
     return { type: INTENT_TYPES.GRATITUDE, text: clean };
   }
 
-  // 5. Dining Mode Commands
-  if (DINE_IN_PATTERNS.some(regex => regex.test(clean))) {
-    return { type: INTENT_TYPES.DINE_IN, text: clean };
-  }
-  if (TAKEAWAY_PATTERNS.some(regex => regex.test(clean))) {
-    return { type: INTENT_TYPES.TAKEAWAY, text: clean };
-  }
-
-  // 6. Cancel / Confirmation when not in pending state
-  if (CANCEL_PATTERNS.some(regex => regex.test(clean))) {
-    return { type: INTENT_TYPES.CANCEL, text: clean };
-  }
+  // 5. Standalone Cancel / Confirmation when not in pending state
   if (CONFIRM_PATTERNS.some(regex => regex.test(clean))) {
     return { type: INTENT_TYPES.CONFIRMATION, text: clean };
   }
+  if (CANCEL_PATTERNS.some(regex => regex.test(clean))) {
+    return { type: INTENT_TYPES.CANCEL, text: clean };
+  }
+  if (MODIFY_PATTERNS.some(regex => regex.test(clean))) {
+    return { type: INTENT_TYPES.MODIFY, text: clean };
+  }
 
   // 6. Food Order vs Unknown Check
-  // Check if transcript contains any food keywords, numbers, or order phrasing
   const foodKeys = Object.keys(FOOD_TRANSLATIONS);
   const words = clean.split(' ');
 
   const hasFoodKeyword = foodKeys.some(fk => clean.includes(fk.toLowerCase()));
-  const hasQuantityWord = /^(one|two|three|four|five|six|seven|eight|nine|ten|a|an|couple|1|2|3|4|5|6|7|8|9|10|ಒಂದು|ಎರಡು|ಮೂರು|ನಾಲ್ಕು|ಐದು|ಆರು|ಏಳು|ಎಂಟು|ಒಂಬತ್ತು|ಹತ್ತು|೧|೨|೩|೪|೫|೬|೭|೮|೯|೧೦|एक|दो|तीन|चार|पांच|पाँच|छह|सात|आठ|नौ|दस|१|२|३|४|५|६|७|८|९|१०)/i.test(clean);
+  const hasQuantityWord = /(one|two|three|four|five|six|seven|eight|nine|ten|a|an|couple|1|2|3|4|5|6|7|8|9|10|ಒಂದು|ಎರಡು|ಮೂರು|ನಾಲ್ಕು|ಐದು|೧|೨|೩|೪|೫|एक|दो|तीन|चार|पांच|पाँच|१|२|३|४|५)/i.test(clean);
   const hasOrderVerb = /(want|order|give|bring|get|need|take|have|ನನಗೆ|ನಮಗೆ|ಕೊಡಿ|ಆರ್ಡರ್|ಮತ್ತು|मुझे|हमे|दीजिए|लाओ|और)/i.test(clean);
 
   if (hasFoodKeyword || hasQuantityWord || hasOrderVerb || words.length >= 2) {
     return { type: INTENT_TYPES.FOOD_ORDER, text: clean };
   }
 
-  // Fallback to unknown if single non-food word
   return { type: INTENT_TYPES.UNKNOWN, text: clean };
 };
 
@@ -231,6 +228,6 @@ export const classifyIntent = (transcript = '', hasPendingOrder = false) => {
  * Get response text for a conversational intent
  */
 export const getConversationalResponse = (intentType, langCode = 'en-IN') => {
-  const responses = INTENT_RESPONSES[intentType] || INTENT_RESPONSES.unknown;
-  return responses[langCode] || responses['en-IN'] || responses.unknown['en-IN'];
+  const responses = INTENT_RESPONSES[intentType] || INTENT_RESPONSES[INTENT_TYPES.UNKNOWN];
+  return responses[langCode] || responses['en-IN'] || INTENT_RESPONSES[INTENT_TYPES.UNKNOWN]['en-IN'];
 };

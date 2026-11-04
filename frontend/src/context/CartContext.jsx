@@ -80,18 +80,19 @@ export const CartProvider = ({ children }) => {
 
   // Add Item to Cart
   const addItem = (item, quantity = 1) => {
-    if (!item.isAvailable) return;
+    if (!item || item.isAvailable === false) return;
+    const itemId = item.id || (item._id ? item._id.toString() : null) || item.name;
     setItems((prev) => {
-      const existing = prev.find((i) => i.id === item.id);
+      const existing = prev.find((i) => (i.id || i._id) === itemId);
       if (existing) {
         return prev.map((i) =>
-          i.id === item.id ? { ...i, quantity: i.quantity + quantity } : i
+          (i.id || i._id) === itemId ? { ...i, quantity: i.quantity + quantity } : i
         );
       }
       return [
         ...prev,
         {
-          id: item.id,
+          id: itemId,
           name: item.name,
           price: item.price,
           type: item.type,

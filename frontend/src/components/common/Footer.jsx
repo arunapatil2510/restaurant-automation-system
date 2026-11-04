@@ -31,7 +31,6 @@ export const Footer = () => {
             <li><Link to="/">Home</Link></li>
             <li><Link to="/menu">Digital Menu</Link></li>
             <li><Link to="/offers">Promotional Offers</Link></li>
-            <li><Link to="/qr-access">Table QR Codes</Link></li>
             <li><Link to="/cart">Your Cart</Link></li>
           </ul>
         </div>

@@ -149,9 +149,6 @@ export const MenuPage = () => {
             >
               <Mic size={14} /> Voice Order
             </button>
-            <Link to="/qr-access" className="table-switch-link">
-              Change Table QR
-            </Link>
           </div>
         </div>
       </div>

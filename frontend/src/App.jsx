@@ -10,7 +10,6 @@ import { HomePage } from './pages/HomePage';
 import { MenuPage } from './pages/MenuPage';
 import { CartPage } from './pages/CartPage';
 import { OffersPage } from './pages/OffersPage';
-import { QRAccessPage } from './pages/QRAccessPage';
 
 // Admin Components & Pages
 import { ProtectedRoute } from './components/admin/ProtectedRoute';
@@ -48,7 +47,6 @@ function App() {
               <Route path="/menu" element={<MenuPage />} />
               <Route path="/cart" element={<CartPage />} />
               <Route path="/offers" element={<OffersPage />} />
-              <Route path="/qr-access" element={<QRAccessPage />} />
             </Route>
 
             {/* 2. Admin Login Page */}

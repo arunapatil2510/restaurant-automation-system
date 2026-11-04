@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
   Utensils, 
-  QrCode, 
   Sparkles, 
   Clock, 
   ShieldCheck, 
@@ -84,7 +83,7 @@ export const HomePage = () => {
     loadKioskData();
   }, []);
 
-  const currentLang = SUPPORTED_LANGUAGES.find((l) => l.code === selectedLanguage) || SUPPORTED_LANGUAGES[0];
+  const currentLang = SUPPORTED_LANGUAGES.find((l) => l.code === kioskLanguage) || SUPPORTED_LANGUAGES[0];
 
   const scrollToTouchMenu = () => {
     if (touchMenuRef.current) {

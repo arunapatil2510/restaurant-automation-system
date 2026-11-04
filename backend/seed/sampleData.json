@@ -41,9 +41,46 @@
       "isAvailable": true,
       "isSpecial": true,
       "prepTime": "10 min",
-      "image": "https://images.unsplash.com/photo-1630383249896-424e482df921?w=600&h=400&fit=crop",
-      "ingredients": ["Rice Batter", "Potato", "Mustard Seeds", "Curry Leaves", "Coconut", "Lentils"],
-      "dietaryTags": ["veg", "south-indian", "popular", "jain-option"]
+      "image": "https://images.unsplash.com/photo-1668236543090-82eba5ee5976?w=600&h=400&fit=crop",
+      "ingredients": [
+        "Rice Batter",
+        "Potato",
+        "Mustard Seeds",
+        "Curry Leaves",
+        "Coconut",
+        "Lentils"
+      ],
+      "dietaryTags": [
+        "veg",
+        "south-indian",
+        "popular",
+        "jain-option"
+      ]
+    },
+    {
+      "name": "Crispy Veg Samosa (2 Pcs)",
+      "description": "Crispy golden fried pastry cones filled with spiced potatoes, green peas, and cashews, served with mint & tamarind chutneys.",
+      "categorySlug": "starters",
+      "price": 60,
+      "type": "veg",
+      "isAvailable": true,
+      "isSpecial": true,
+      "prepTime": "5 min",
+      "image": "https://images.unsplash.com/photo-1601050690597-df0568f70950?w=600&h=400&fit=crop",
+      "ingredients": [
+        "Refined Flour",
+        "Spiced Potatoes",
+        "Green Peas",
+        "Garam Masala",
+        "Mint Chutney",
+        "Tamarind"
+      ],
+      "dietaryTags": [
+        "veg",
+        "snacks",
+        "popular",
+        "street-food"
+      ]
     },
     {
       "name": "Gobi Manchurian",
@@ -54,9 +91,21 @@
       "isAvailable": true,
       "isSpecial": false,
       "prepTime": "15 min",
-      "image": "https://images.unsplash.com/photo-1645177628172-a94c1f96e6db?w=600&h=400&fit=crop",
-      "ingredients": ["Cauliflower", "Cornflour", "Garlic", "Soy Sauce", "Green Chili", "Spring Onion"],
-      "dietaryTags": ["veg", "indo-chinese", "spicy", "popular"]
+      "image": "/images/dishes/gobi-manchurian.jpg",
+      "ingredients": [
+        "Cauliflower",
+        "Cornflour",
+        "Garlic",
+        "Soy Sauce",
+        "Green Chili",
+        "Spring Onion"
+      ],
+      "dietaryTags": [
+        "veg",
+        "indo-chinese",
+        "spicy",
+        "popular"
+      ]
     },
     {
       "name": "Chicken Kabab",
@@ -68,8 +117,19 @@
       "isSpecial": true,
       "prepTime": "20 min",
       "image": "https://images.unsplash.com/photo-1599487488170-d11ec9c172f0?w=600&h=400&fit=crop",
-      "ingredients": ["Chicken", "Yogurt", "Ginger-Garlic Paste", "Garam Masala", "Lemon Juice"],
-      "dietaryTags": ["nonveg", "tandoor", "spicy", "popular"]
+      "ingredients": [
+        "Chicken",
+        "Yogurt",
+        "Ginger-Garlic Paste",
+        "Garam Masala",
+        "Lemon Juice"
+      ],
+      "dietaryTags": [
+        "nonveg",
+        "tandoor",
+        "spicy",
+        "popular"
+      ]
     },
     {
       "name": "Hot & Sour Veg Soup",
@@ -81,8 +141,19 @@
       "isSpecial": false,
       "prepTime": "8 min",
       "image": "https://images.unsplash.com/photo-1547592166-23ac45744acd?w=600&h=400&fit=crop",
-      "ingredients": ["Mixed Veggies", "Mushrooms", "Black Pepper", "Vinegar", "Soy Sauce"],
-      "dietaryTags": ["veg", "soup", "gluten-free-option", "spicy"]
+      "ingredients": [
+        "Mixed Veggies",
+        "Mushrooms",
+        "Black Pepper",
+        "Vinegar",
+        "Soy Sauce"
+      ],
+      "dietaryTags": [
+        "veg",
+        "soup",
+        "gluten-free-option",
+        "spicy"
+      ]
     },
     {
       "name": "Peri Peri French Fries",
@@ -94,8 +165,18 @@
       "isSpecial": false,
       "prepTime": "10 min",
       "image": "https://images.unsplash.com/photo-1573080496219-bb080dd4f877?w=600&h=400&fit=crop",
-      "ingredients": ["Potato", "Peri Peri Seasoning", "Refined Sunflower Oil", "Sea Salt"],
-      "dietaryTags": ["veg", "snacks", "spicy", "kids-favorite"]
+      "ingredients": [
+        "Potato",
+        "Peri Peri Seasoning",
+        "Refined Sunflower Oil",
+        "Sea Salt"
+      ],
+      "dietaryTags": [
+        "veg",
+        "snacks",
+        "spicy",
+        "kids-favorite"
+      ]
     },
     {
       "name": "Paneer Butter Masala",
@@ -107,8 +188,21 @@
       "isSpecial": true,
       "prepTime": "18 min",
       "image": "https://images.unsplash.com/photo-1631452180519-c014fe946bc7?w=600&h=400&fit=crop",
-      "ingredients": ["Paneer", "Tomato Gravy", "Butter", "Fresh Cream", "Kasuri Methi", "Cashew Paste"],
-      "dietaryTags": ["veg", "north-indian", "creamy", "popular", "jain-option"]
+      "ingredients": [
+        "Paneer",
+        "Tomato Gravy",
+        "Butter",
+        "Fresh Cream",
+        "Kasuri Methi",
+        "Cashew Paste"
+      ],
+      "dietaryTags": [
+        "veg",
+        "north-indian",
+        "creamy",
+        "popular",
+        "jain-option"
+      ]
     },
     {
       "name": "Butter Naan",
@@ -119,9 +213,18 @@
       "isAvailable": true,
       "isSpecial": false,
       "prepTime": "8 min",
-      "image": "https://images.unsplash.com/photo-1601050690597-df0568f70950?w=600&h=400&fit=crop",
-      "ingredients": ["Refined Wheat Flour", "Milk", "Yeast", "Butter"],
-      "dietaryTags": ["veg", "breads", "popular"]
+      "image": "/images/dishes/butter-naan.jpg",
+      "ingredients": [
+        "Refined Wheat Flour",
+        "Milk",
+        "Yeast",
+        "Butter"
+      ],
+      "dietaryTags": [
+        "veg",
+        "breads",
+        "popular"
+      ]
     },
     {
       "name": "Dal Tadka",
@@ -133,8 +236,20 @@
       "isSpecial": false,
       "prepTime": "12 min",
       "image": "https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=600&h=400&fit=crop",
-      "ingredients": ["Yellow Lentils", "Ghee", "Cumin", "Garlic", "Tomato", "Green Chili"],
-      "dietaryTags": ["veg", "comfort-food", "gluten-free", "jain-option"]
+      "ingredients": [
+        "Yellow Lentils",
+        "Ghee",
+        "Cumin",
+        "Garlic",
+        "Tomato",
+        "Green Chili"
+      ],
+      "dietaryTags": [
+        "veg",
+        "comfort-food",
+        "gluten-free",
+        "jain-option"
+      ]
     },
     {
       "name": "North Indian Deluxe Thali",
@@ -146,8 +261,20 @@
       "isSpecial": false,
       "prepTime": "20 min",
       "image": "https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=600&h=400&fit=crop",
-      "ingredients": ["Paneer", "Dal", "Wheat Flour", "Basmati Rice", "Curd", "Sweets"],
-      "dietaryTags": ["veg", "thali", "combo", "sold-out-demo"]
+      "ingredients": [
+        "Paneer",
+        "Dal",
+        "Wheat Flour",
+        "Basmati Rice",
+        "Curd",
+        "Sweets"
+      ],
+      "dietaryTags": [
+        "veg",
+        "thali",
+        "combo",
+        "sold-out-demo"
+      ]
     },
     {
       "name": "South Indian Meals",
@@ -159,8 +286,20 @@
       "isSpecial": false,
       "prepTime": "12 min",
       "image": "https://images.unsplash.com/photo-1610192244261-3f33de3f55e4?w=600&h=400&fit=crop",
-      "ingredients": ["Sona Masoori Rice", "Lentils", "Tamarind", "Seasonal Vegetables", "Curd", "Papad"],
-      "dietaryTags": ["veg", "south-indian", "healthy", "traditional"]
+      "ingredients": [
+        "Sona Masoori Rice",
+        "Lentils",
+        "Tamarind",
+        "Seasonal Vegetables",
+        "Curd",
+        "Papad"
+      ],
+      "dietaryTags": [
+        "veg",
+        "south-indian",
+        "healthy",
+        "traditional"
+      ]
     },
     {
       "name": "Veg Fried Rice",
@@ -172,8 +311,19 @@
       "isSpecial": false,
       "prepTime": "15 min",
       "image": "https://images.unsplash.com/photo-1603133872878-684f208fb84b?w=600&h=400&fit=crop",
-      "ingredients": ["Basmati Rice", "Carrot", "Beans", "Capsicum", "Soy Sauce", "White Pepper"],
-      "dietaryTags": ["veg", "indo-chinese", "mild"]
+      "ingredients": [
+        "Basmati Rice",
+        "Carrot",
+        "Beans",
+        "Capsicum",
+        "Soy Sauce",
+        "White Pepper"
+      ],
+      "dietaryTags": [
+        "veg",
+        "indo-chinese",
+        "mild"
+      ]
     },
     {
       "name": "Veg Dum Biryani",
@@ -185,8 +335,21 @@
       "isSpecial": true,
       "prepTime": "25 min",
       "image": "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=600&h=400&fit=crop",
-      "ingredients": ["Basmati Rice", "Cauliflower", "Carrot", "Green Peas", "Mint", "Saffron Milk", "Biryani Spices"],
-      "dietaryTags": ["veg", "biryani", "chef-special", "popular"]
+      "ingredients": [
+        "Basmati Rice",
+        "Cauliflower",
+        "Carrot",
+        "Green Peas",
+        "Mint",
+        "Saffron Milk",
+        "Biryani Spices"
+      ],
+      "dietaryTags": [
+        "veg",
+        "biryani",
+        "chef-special",
+        "popular"
+      ]
     },
     {
       "name": "Chicken Dum Biryani",
@@ -197,9 +360,22 @@
       "isAvailable": true,
       "isSpecial": true,
       "prepTime": "30 min",
-      "image": "https://images.unsplash.com/photo-1589302168068-964664d93dc0?w=600&h=400&fit=crop",
-      "ingredients": ["Chicken", "Aged Basmati Rice", "Fried Onions", "Mint", "Ghee", "Yogurt", "Special Spices"],
-      "dietaryTags": ["nonveg", "biryani", "popular", "spicy"]
+      "image": "https://images.unsplash.com/photo-1633945274405-b6c8069047b0?w=600&h=400&fit=crop",
+      "ingredients": [
+        "Chicken",
+        "Aged Basmati Rice",
+        "Fried Onions",
+        "Mint",
+        "Ghee",
+        "Yogurt",
+        "Special Spices"
+      ],
+      "dietaryTags": [
+        "nonveg",
+        "biryani",
+        "popular",
+        "spicy"
+      ]
     },
     {
       "name": "Jeera Rice",
@@ -211,8 +387,18 @@
       "isSpecial": false,
       "prepTime": "10 min",
       "image": "https://images.unsplash.com/photo-1512058564366-18510be2db19?w=600&h=400&fit=crop",
-      "ingredients": ["Basmati Rice", "Cumin Seeds", "Desi Ghee", "Fresh Coriander"],
-      "dietaryTags": ["veg", "rice", "mild", "gluten-free"]
+      "ingredients": [
+        "Basmati Rice",
+        "Cumin Seeds",
+        "Desi Ghee",
+        "Fresh Coriander"
+      ],
+      "dietaryTags": [
+        "veg",
+        "rice",
+        "mild",
+        "gluten-free"
+      ]
     },
     {
       "name": "South Indian Filter Coffee",
@@ -223,9 +409,17 @@
       "isAvailable": true,
       "isSpecial": false,
       "prepTime": "5 min",
-      "image": "https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=600&h=400&fit=crop",
-      "ingredients": ["Fresh Coffee Decoction", "Boiled Whole Milk", "Sugar"],
-      "dietaryTags": ["veg", "hot-drink", "popular"]
+      "image": "https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=600&h=400&fit=crop",
+      "ingredients": [
+        "Fresh Coffee Decoction",
+        "Boiled Whole Milk",
+        "Sugar"
+      ],
+      "dietaryTags": [
+        "veg",
+        "hot-drink",
+        "popular"
+      ]
     },
     {
       "name": "Masala Chai",
@@ -236,9 +430,19 @@
       "isAvailable": true,
       "isSpecial": false,
       "prepTime": "5 min",
-      "image": "https://images.unsplash.com/photo-1571934811356-5cc061b6821f?w=600&h=400&fit=crop",
-      "ingredients": ["Assam Tea", "Fresh Ginger", "Cardamom", "Cloves", "Milk", "Sugar"],
-      "dietaryTags": ["veg", "hot-drink"]
+      "image": "https://images.unsplash.com/photo-1576092768241-dec231879fc3?w=600&h=400&fit=crop",
+      "ingredients": [
+        "Assam Tea",
+        "Fresh Ginger",
+        "Cardamom",
+        "Cloves",
+        "Milk",
+        "Sugar"
+      ],
+      "dietaryTags": [
+        "veg",
+        "hot-drink"
+      ]
     },
     {
       "name": "Fresh Lime Juice",
@@ -249,9 +453,20 @@
       "isAvailable": true,
       "isSpecial": false,
       "prepTime": "5 min",
-      "image": "https://images.unsplash.com/photo-1621263764928-df1444c5e859?w=600&h=400&fit=crop",
-      "ingredients": ["Fresh Lime", "Mint Leaves", "Black Salt", "Chilled Water", "Sugar/Salt"],
-      "dietaryTags": ["veg", "cold-drink", "refreshing", "gluten-free"]
+      "image": "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?w=600&h=400&fit=crop",
+      "ingredients": [
+        "Fresh Lime",
+        "Mint Leaves",
+        "Black Salt",
+        "Chilled Water",
+        "Sugar/Salt"
+      ],
+      "dietaryTags": [
+        "veg",
+        "cold-drink",
+        "refreshing",
+        "gluten-free"
+      ]
     },
     {
       "name": "Cold Coffee with Ice Cream",
@@ -263,8 +478,17 @@
       "isSpecial": true,
       "prepTime": "6 min",
       "image": "https://images.unsplash.com/photo-1517701550927-30cf4ba1dba5?w=600&h=400&fit=crop",
-      "ingredients": ["Espresso Shot", "Chilled Milk", "Vanilla Ice Cream", "Chocolate Drizzle"],
-      "dietaryTags": ["veg", "cold-drink", "dessert-drink"]
+      "ingredients": [
+        "Espresso Shot",
+        "Chilled Milk",
+        "Vanilla Ice Cream",
+        "Chocolate Drizzle"
+      ],
+      "dietaryTags": [
+        "veg",
+        "cold-drink",
+        "dessert-drink"
+      ]
     },
     {
       "name": "Gulab Jamun (2 Pcs)",
@@ -275,9 +499,19 @@
       "isAvailable": true,
       "isSpecial": false,
       "prepTime": "3 min",
-      "image": "https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=600&h=400&fit=crop",
-      "ingredients": ["Khoya / Mawa", "Cardamom Syrup", "Saffron", "Pistachio Garnish"],
-      "dietaryTags": ["veg", "sweet", "traditional", "popular"]
+      "image": "/images/dishes/gulab-jamun.jpg",
+      "ingredients": [
+        "Khoya / Mawa",
+        "Cardamom Syrup",
+        "Saffron",
+        "Pistachio Garnish"
+      ],
+      "dietaryTags": [
+        "veg",
+        "sweet",
+        "traditional",
+        "popular"
+      ]
     },
     {
       "name": "Sizzling S'mores Brownie",
@@ -288,9 +522,42 @@
       "isAvailable": false,
       "isSpecial": false,
       "prepTime": "8 min",
-      "image": "https://images.unsplash.com/photo-1564355808539-22fda35bed7e?w=600&h=400&fit=crop",
-      "ingredients": ["Dark Chocolate", "Walnuts", "Vanilla Bean Ice Cream", "Hot Chocolate Fudge"],
-      "dietaryTags": ["veg", "dessert", "chocolate", "sold-out-demo"]
+      "image": "https://images.unsplash.com/photo-1606313564200-e75d5e30476c?w=600&h=400&fit=crop",
+      "ingredients": [
+        "Dark Chocolate",
+        "Walnuts",
+        "Vanilla Bean Ice Cream",
+        "Hot Chocolate Fudge"
+      ],
+      "dietaryTags": [
+        "veg",
+        "dessert",
+        "chocolate",
+        "sold-out-demo"
+      ]
+    },
+    {
+      "name": "Mango Lassi",
+      "description": "Rich and creamy chilled yogurt shake blended with sweet Alphonso mango pulp and cardamom.",
+      "categorySlug": "beverages",
+      "price": 90,
+      "type": "veg",
+      "isAvailable": true,
+      "isSpecial": true,
+      "prepTime": "4 min",
+      "image": "https://images.unsplash.com/photo-1534353473418-4cfa6c56fd38?w=600&h=400&fit=crop",
+      "ingredients": [
+        "Fresh Yogurt",
+        "Alphonso Mango Pulp",
+        "Cardamom",
+        "Sugar"
+      ],
+      "dietaryTags": [
+        "veg",
+        "cold-drink",
+        "popular",
+        "special"
+      ]
     }
   ],
   "offers": [
@@ -320,25 +587,59 @@
       "title": "Restaurant Timings, Location & Contact",
       "category": "timing",
       "content": "RESTOSMART is located at MG Road, Bengaluru, Karnataka 560001. We are open 7 days a week from 11:00 AM to 11:00 PM. Dine-in kitchen orders close at 10:30 PM. For inquiries or table reservations, call +91 9876543210 or email info@restosmart.com.",
-      "keywords": ["timing", "hours", "location", "address", "phone", "contact", "open", "close"]
+      "keywords": [
+        "timing",
+        "hours",
+        "location",
+        "address",
+        "phone",
+        "contact",
+        "open",
+        "close"
+      ]
     },
     {
       "title": "Jain & Dietary Cooking Guidelines",
       "category": "allergen",
       "content": "We take dietary choices very seriously. We offer dedicated Jain preparations (without onion, garlic, or root vegetables) for Masala Dosa (plain/jain aloo), Paneer Butter Masala, Dal Tadka, and Jeera Rice. Please inform your server or mention 'Jain preparation' in the cooking notes during checkout.",
-      "keywords": ["jain", "no onion", "no garlic", "vegan", "gluten-free", "dietary", "pure veg"]
+      "keywords": [
+        "jain",
+        "no onion",
+        "no garlic",
+        "vegan",
+        "gluten-free",
+        "dietary",
+        "pure veg"
+      ]
     },
     {
       "title": "Allergen & Ingredient Transparency Standards",
       "category": "policy",
       "content": "All vegetarian and non-vegetarian dishes are prepared in strictly separated cooking vessels with distinct utensils. Dairy products (Paneer, Ghee, Cream, Butter) and Nuts (Cashews in Paneer Butter Masala) are used in select curries. If you have nut or lactose allergies, please consult our staff before placing your order.",
-      "keywords": ["allergy", "allergens", "nuts", "dairy", "lactose", "ghee", "halal", "non-veg separate"]
+      "keywords": [
+        "allergy",
+        "allergens",
+        "nuts",
+        "dairy",
+        "lactose",
+        "ghee",
+        "halal",
+        "non-veg separate"
+      ]
     },
     {
       "title": "Table Seating, QR Ordering & Reservation Policy",
       "category": "policy",
       "content": "Each table is equipped with a dedicated QR code (e.g. Table 1 to 20). Scanning the code immediately binds your orders to your table number. Customers can also book tables in advance for up to 20 guests via our Reservation page. Reserved tables are held for up to 15 minutes past the booking time slot.",
-      "keywords": ["qr", "table", "reservation", "booking", "seating", "wait time", "policy"]
+      "keywords": [
+        "qr",
+        "table",
+        "reservation",
+        "booking",
+        "seating",
+        "wait time",
+        "policy"
+      ]
     }
   ]
 }

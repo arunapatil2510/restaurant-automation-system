@@ -3,6 +3,7 @@ import { Modal } from '../common/Modal';
 import { VegBadge, SpecialBadge, StockBadge } from '../common/Badge';
 import { Clock, Star, Plus, Minus, ShoppingBag, Check } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
+import { getCulinaryPlaceholder, handleDishImageError } from '../../utils/imagePlaceholder';
 
 export const DishDetailModal = ({ dish, isOpen, onClose }) => {
   const { getItemQuantity, addItem, updateQuantity } = useCart();
@@ -12,11 +13,7 @@ export const DishDetailModal = ({ dish, isOpen, onClose }) => {
   const quantity = getItemQuantity(dish.id);
   const isAvailable = dish.isAvailable !== false;
 
-  const fallbackImage = dish.categorySlug === 'beverages'
-    ? 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=600&h=400&fit=crop'
-    : dish.categorySlug === 'desserts'
-    ? 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=600&h=400&fit=crop'
-    : 'https://images.unsplash.com/photo-1630383249896-424e482df921?w=600&h=400&fit=crop';
+  const placeholderImg = getCulinaryPlaceholder(dish.name, dish.categorySlug, dish.type);
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={dish.name} maxWidth="560px">
@@ -24,13 +21,10 @@ export const DishDetailModal = ({ dish, isOpen, onClose }) => {
         {/* Large Cover Image */}
         <div className="dish-modal-img-box">
           <img 
-            src={dish.image || fallbackImage} 
+            src={dish.image || placeholderImg}
             alt={dish.name} 
             className="dish-modal-img" 
-            onError={(e) => {
-              e.target.onerror = null;
-              e.target.src = fallbackImage;
-            }}
+            onError={(e) => handleDishImageError(e, dish)}
           />
           <div className="dish-modal-badges">
             <VegBadge type={dish.type} />

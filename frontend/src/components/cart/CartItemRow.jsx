@@ -1,12 +1,18 @@
 import React from 'react';
 import { Plus, Minus, Trash2 } from 'lucide-react';
 import { VegBadge } from '../common/Badge';
+import { getCulinaryPlaceholder, handleDishImageError } from '../../utils/imagePlaceholder';
 
 export const CartItemRow = ({ item, onUpdateQuantity, onRemove }) => {
   return (
     <div className="cart-item-card">
       <div className="cart-item-img-box">
-        <img src={item.image} alt={item.name} className="cart-item-thumb" />
+        <img
+          src={item.image || getCulinaryPlaceholder(item.name, item.categorySlug, item.type)}
+          alt={item.name}
+          className="cart-item-thumb"
+          onError={(e) => handleDishImageError(e, item)}
+        />
       </div>
 
       <div className="cart-item-info">

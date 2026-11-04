@@ -25,7 +25,12 @@ import {
   SARVAM_SUPPORTED_LANGUAGES, 
   speakKioskSpeech 
 } from '../../services/sarvamVoiceService.js';
-import { matchVoiceOrderWithMenu } from '../../utils/voiceParser.js';
+import {
+  formatOrderConfirmationPrompt,
+  formatUnknownItemPrompt,
+  getSpeechRecognitionErrorMessage
+} from '../../utils/multilingualVoiceEngine.js';
+import { matchVoiceOrderWithMenu, mergeOrderItems } from '../../utils/voiceParser.js';
 import { 
   classifyIntent, 
   INTENT_TYPES, 
@@ -41,6 +46,7 @@ export const VOICE_STATES = {
   PROCESSING: 'processing',
   CONVERSATION: 'conversation',
   CONFIRMATION: 'confirmation',
+  ASK_MORE: 'ask_more',
   CONFIRMED: 'confirmed',
   PERMISSION_DENIED: 'permission_denied',
   ERROR: 'error'
@@ -57,20 +63,48 @@ export const KioskVoiceSection = ({
 
   // Voice State Machine
   const [voiceState, setVoiceState] = useState(VOICE_STATES.IDLE);
-  const [systemSpeech, setSystemSpeech] = useState("Hello! Welcome to RESTOSMART. What would you like to order?");
+  const [systemSpeech, setSystemSpeech] = useState("Welcome! What would you like to order today?");
   const [transcript, setTranscript] = useState('');
   const [interimTranscript, setInterimTranscript] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [isEditingManually, setIsEditingManually] = useState(false);
 
-  // Parsed Food Order Items
+  // Parsed Food Order Items: confirmedItems persists across turns, candidateItems is the turn's item awaiting confirmation
   const [parsedResult, setParsedResult] = useState(null);
-  const [orderItems, setOrderItems] = useState([]);
+  const [confirmedItems, setConfirmedItems] = useState([]);
+  const [candidateItems, setCandidateItems] = useState([]);
   const [manualInput, setManualInput] = useState('');
 
   const recognitionRef = useRef(null);
   const autoListenTimeoutRef = useRef(null);
+  const silenceTimerRef = useRef(null);
+  const hasProcessedRef = useRef(false);
+  const pendingTranscriptRef = useRef('');
   const navigatedRef = useRef(false);
+  const hasCommittedCartRef = useRef(false);
+  const isSpeakingRef = useRef(false);
+  const voiceStateRef = useRef(voiceState);
+  const confirmedItemsRef = useRef(confirmedItems);
+  const candidateItemsRef = useRef(candidateItems);
+  const activeLanguageRef = useRef(activeLanguage);
+
+  // Keep refs synchronized on every render
+  useEffect(() => {
+    voiceStateRef.current = voiceState;
+  }, [voiceState]);
+
+  useEffect(() => {
+    confirmedItemsRef.current = confirmedItems;
+  }, [confirmedItems]);
+
+  useEffect(() => {
+    candidateItemsRef.current = candidateItems;
+  }, [candidateItems]);
+
+  useEffect(() => {
+    activeLanguageRef.current = activeLanguage;
+  }, [activeLanguage]);
+
   const currentLangConfig = SARVAM_SUPPORTED_LANGUAGES.find(l => l.code === activeLanguage) || SARVAM_SUPPORTED_LANGUAGES[0];
 
   // Cleanup on unmount
@@ -80,17 +114,34 @@ export const KioskVoiceSection = ({
       if (autoListenTimeoutRef.current) {
         clearTimeout(autoListenTimeoutRef.current);
       }
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+      }
     };
   }, []);
 
   // Speak a prompt and automatically start listening afterwards for true hands-free voice loop
-  const speakAndAutoListen = (text, langCode = activeLanguage) => {
+  const speakAndAutoListen = (text, langCode = activeLanguage, targetState = null) => {
+    stopListening();
     setSystemSpeech(text);
-    setVoiceState(VOICE_STATES.SPEAKING);
+    isSpeakingRef.current = true;
+
+    if (targetState) {
+      setVoiceState(targetState);
+      voiceStateRef.current = targetState;
+    } else {
+      setVoiceState(VOICE_STATES.SPEAKING);
+      voiceStateRef.current = VOICE_STATES.SPEAKING;
+    }
 
     speakKioskSpeech(text, langCode, () => {
-      // Once speech finishes, open microphone after a tiny pause to avoid self-pickup
+      isSpeakingRef.current = false;
+      // Once speech finishes, open microphone after a tiny pause to avoid speaker feedback
       autoListenTimeoutRef.current = setTimeout(() => {
+        if (targetState) {
+          setVoiceState(targetState);
+          voiceStateRef.current = targetState;
+        }
         startListening();
       }, 350);
     });
@@ -103,7 +154,7 @@ export const KioskVoiceSection = ({
       onLanguageChange(code);
     }
     const newLang = SARVAM_SUPPORTED_LANGUAGES.find(l => l.code === code) || SARVAM_SUPPORTED_LANGUAGES[0];
-    speakAndAutoListen(newLang.greeting, code);
+    speakAndAutoListen(newLang.greeting, code, VOICE_STATES.LISTENING);
   };
 
   // Start Speech Recognition
@@ -116,11 +167,10 @@ export const KioskVoiceSection = ({
     }
 
     try {
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.abort();
-        } catch {}
-      }
+      stopListening();
+
+      hasProcessedRef.current = false;
+      pendingTranscriptRef.current = '';
 
       const recognition = new SpeechRecognition();
       recognition.continuous = false;
@@ -128,7 +178,7 @@ export const KioskVoiceSection = ({
       recognition.lang = currentLangConfig.sarvamSttCode || activeLanguage;
 
       recognition.onstart = () => {
-        setVoiceState(VOICE_STATES.LISTENING);
+        setVoiceState(prev => prev === VOICE_STATES.CONFIRMATION ? VOICE_STATES.CONFIRMATION : VOICE_STATES.LISTENING);
         setErrorMessage('');
         setInterimTranscript('');
       };
@@ -144,45 +194,97 @@ export const KioskVoiceSection = ({
           }
         }
 
-        if (final) {
-          setTranscript(final);
-          processUserInput(final);
-        } else {
-          setInterimTranscript(interim);
+        const currentSpeech = (final || interim).trim();
+        if (currentSpeech) {
+          pendingTranscriptRef.current = currentSpeech;
+          setInterimTranscript(currentSpeech);
+
+          if (silenceTimerRef.current) {
+            clearTimeout(silenceTimerRef.current);
+          }
+
+          if (final && !hasProcessedRef.current) {
+            hasProcessedRef.current = true;
+            stopListening();
+            setTranscript(final.trim());
+            processUserInput(final.trim());
+            return;
+          }
+
+          // Silence detection: when customer finishes speaking, auto-finalize after 750ms of silence
+          silenceTimerRef.current = setTimeout(() => {
+            if (!hasProcessedRef.current && pendingTranscriptRef.current.trim()) {
+              hasProcessedRef.current = true;
+              const textToProcess = pendingTranscriptRef.current.trim();
+              stopListening();
+              setTranscript(textToProcess);
+              processUserInput(textToProcess);
+            }
+          }, 750);
         }
       };
 
       recognition.onerror = (event) => {
-        console.warn('Speech recognition error:', event.error);
+        console.warn('[KioskVoiceSection] Speech recognition error event:', event.error, event);
         if (event.error === 'not-allowed' || event.error === 'permission-denied') {
+          const errorMsg = getSpeechRecognitionErrorMessage(event.error, activeLanguage);
+          setErrorMessage(errorMsg);
           setVoiceState(VOICE_STATES.PERMISSION_DENIED);
         } else if (event.error === 'no-speech') {
-          setVoiceState(VOICE_STATES.IDLE);
-        } else {
+          // If no speech heard, stay in current state or idle gracefully without error banner
+          if (voiceState === VOICE_STATES.LISTENING) {
+            setVoiceState(VOICE_STATES.IDLE);
+          }
+        } else if (event.error !== 'aborted') {
+          const errorMsg = getSpeechRecognitionErrorMessage(event.error, activeLanguage);
+          setErrorMessage(errorMsg);
           setVoiceState(VOICE_STATES.ERROR);
-          setErrorMessage(`Could not capture audio (${event.error}). Please tap speak or try again.`);
         }
       };
 
       recognition.onend = () => {
-        if (voiceState === VOICE_STATES.LISTENING) {
+        if (silenceTimerRef.current) {
+          clearTimeout(silenceTimerRef.current);
+        }
+        if (!hasProcessedRef.current && pendingTranscriptRef.current.trim()) {
+          hasProcessedRef.current = true;
+          const textToProcess = pendingTranscriptRef.current.trim();
+          setTranscript(textToProcess);
+          processUserInput(textToProcess);
+        } else if (voiceState === VOICE_STATES.LISTENING && !hasProcessedRef.current) {
           setVoiceState(VOICE_STATES.IDLE);
         }
       };
 
       recognitionRef.current = recognition;
+      console.log(`[KioskVoiceSection] Starting speech recognition with lang: ${recognition.lang}`);
       recognition.start();
     } catch (err) {
-      console.error('Failed to start speech recognition:', err);
-      setVoiceState(VOICE_STATES.PERMISSION_DENIED);
+      console.warn('[KioskVoiceSection] SpeechRecognition.start() threw:', err);
+      if (err.name === 'InvalidStateError') {
+        console.log('[KioskVoiceSection] SpeechRecognition already active or transitioning.');
+      } else if (err.name === 'NotAllowedError') {
+        setErrorMessage(getSpeechRecognitionErrorMessage('not-allowed', activeLanguage));
+        setVoiceState(VOICE_STATES.PERMISSION_DENIED);
+      } else {
+        setErrorMessage(getSpeechRecognitionErrorMessage(err.message || err.name, activeLanguage));
+        setVoiceState(VOICE_STATES.ERROR);
+      }
     }
   };
 
   const stopListening = () => {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+    }
     if (recognitionRef.current) {
+      try {
+        recognitionRef.current.abort();
+      } catch {}
       try {
         recognitionRef.current.stop();
       } catch {}
+      recognitionRef.current = null;
     }
   };
 
@@ -190,84 +292,241 @@ export const KioskVoiceSection = ({
   const requestMicPermission = async () => {
     try {
       if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        console.log('[KioskVoiceSection] Proactively testing getUserMedia audio access...');
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         stream.getTracks().forEach(track => track.stop());
+        console.log('✅ [KioskVoiceSection] getUserMedia audio permission verified.');
       }
+      setErrorMessage('');
       setVoiceState(VOICE_STATES.IDLE);
-      speakAndAutoListen(currentLangConfig.greeting, activeLanguage);
+      speakAndAutoListen(currentLangConfig.greeting, activeLanguage, VOICE_STATES.LISTENING);
     } catch (err) {
-      console.warn('Microphone permission request error:', err);
-      setVoiceState(VOICE_STATES.PERMISSION_DENIED);
+      console.warn('[KioskVoiceSection] Microphone getUserMedia request failed:', err.name, err.message);
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        setErrorMessage(getSpeechRecognitionErrorMessage('not-allowed', activeLanguage));
+        setVoiceState(VOICE_STATES.PERMISSION_DENIED);
+      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+        setErrorMessage(getSpeechRecognitionErrorMessage('audio-capture', activeLanguage));
+        setVoiceState(VOICE_STATES.ERROR);
+      } else {
+        setErrorMessage(`Microphone hardware error: ${err.message || err.name}`);
+        setVoiceState(VOICE_STATES.ERROR);
+      }
     }
   };
 
-  // Main Intent & Food Processing Pipeline
+  // Main Intent & Food Processing Pipeline (CONTINUOUS MULTI-ITEM CONVERSATION)
   const processUserInput = (text) => {
-    if (!text || !text.trim()) return;
+    if (!text || !text.trim() || isSpeakingRef.current) return;
 
-    const hasPendingOrder = (voiceState === VOICE_STATES.CONFIRMATION || orderItems.length > 0);
-    const intent = classifyIntent(text, hasPendingOrder);
+    stopListening();
 
-    // 1. CONFIRMATION INTENT (Customer says "Yes", "Confirm", "ಹೌದು", "हाँ", "Correct")
-    if (intent.type === INTENT_TYPES.CONFIRMATION && hasPendingOrder) {
-      confirmAndAddToCart();
-      return;
+    const currentVoiceState = voiceStateRef.current;
+    const currentConfirmed = confirmedItemsRef.current;
+    const currentCandidate = candidateItemsRef.current;
+    const currentLang = activeLanguageRef.current || activeLanguage;
+    const langConfig = SARVAM_SUPPORTED_LANGUAGES.find(l => l.code === currentLang) || SARVAM_SUPPORTED_LANGUAGES[0];
+
+    // Determine current conversation stage
+    const currentStage = currentVoiceState === VOICE_STATES.ASK_MORE
+      ? 'ASK_MORE'
+      : (currentVoiceState === VOICE_STATES.CONFIRMATION ? 'CONFIRM_ITEM' : 'GENERAL');
+
+    const intent = classifyIntent(text, {
+      stage: currentStage,
+      hasPendingOrder: currentCandidate.length > 0
+    });
+
+    // 1. STAGE: Awaiting response to "Would you like anything else?" (VOICE_STATES.ASK_MORE)
+    if (currentVoiceState === VOICE_STATES.ASK_MORE) {
+      // 1A. Customer says NO / Finished / That's all -> Finish session and go to cart exactly once
+      if (intent.type === INTENT_TYPES.FINISH_ORDER || intent.type === INTENT_TYPES.CANCEL) {
+        finalizeSessionAndGoToCart();
+        return;
+      }
+
+      // 1B. Customer says YES / Add more -> Resume listening for next item without clearing confirmed items
+      if (intent.type === INTENT_TYPES.ADD_MORE || intent.type === INTENT_TYPES.CONFIRMATION) {
+        requestMoreItems();
+        return;
+      }
+
+      // 1C. Customer directly speaks a new food item -> fall through to food matching below!
     }
 
-    // 2. CANCEL / MODIFY INTENT (Customer says "No", "Cancel", "Change", "ಬೇಡ", "नहीं")
-    if (intent.type === INTENT_TYPES.CANCEL || intent.type === INTENT_TYPES.MODIFY) {
-      const askMsg = currentLangConfig.askChange;
-      speakAndAutoListen(askMsg, activeLanguage);
-      return;
+    // 2. STAGE: Confirming a candidate item ("Shall I add it to your order?") (VOICE_STATES.CONFIRMATION)
+    if (currentVoiceState === VOICE_STATES.CONFIRMATION) {
+      // 2A. Customer confirms item ("Yes") -> Add item to order exactly once, then ask "Would you like anything else?"
+      if (intent.type === INTENT_TYPES.CONFIRMATION) {
+        confirmCandidateItem();
+        return;
+      }
+
+      // 2B. Customer rejects item ("No" / "Change it") -> Discard only candidate item, keep confirmed items intact
+      if (intent.type === INTENT_TYPES.CANCEL || intent.type === INTENT_TYPES.MODIFY) {
+        rejectCandidateItem();
+        return;
+      }
     }
 
-    // 3. CONVERSATIONAL INTENTS (Greeting, Help, Gratitude)
+    // 3. Conversational Intents (Greeting, Help, Gratitude)
     if (intent.type === INTENT_TYPES.GREETING || intent.type === INTENT_TYPES.HELP || intent.type === INTENT_TYPES.GRATITUDE) {
-      const reply = getConversationalResponse(intent.type, activeLanguage);
-      speakAndAutoListen(reply, activeLanguage);
+      const reply = getConversationalResponse(intent.type, currentLang);
+      const returnState = currentConfirmed.length > 0 && currentVoiceState === VOICE_STATES.ASK_MORE
+        ? VOICE_STATES.ASK_MORE
+        : VOICE_STATES.LISTENING;
+      speakAndAutoListen(reply, currentLang, returnState);
       return;
     }
 
-    // 4. FOOD ORDER INTENT -> Ground against menu
+    // 4. Standalone No/Finish when customer has confirmed items in general listening state
+    if ((intent.type === INTENT_TYPES.FINISH_ORDER || intent.type === INTENT_TYPES.CANCEL) && currentConfirmed.length > 0) {
+      finalizeSessionAndGoToCart();
+      return;
+    }
+
+    // 5. Food Order Intent -> Ground against active menu
     setVoiceState(VOICE_STATES.PROCESSING);
+    voiceStateRef.current = VOICE_STATES.PROCESSING;
 
     setTimeout(() => {
-      const result = matchVoiceOrderWithMenu(text, menuItems, activeLanguage);
+      const result = matchVoiceOrderWithMenu(text, menuItems, currentLang);
       setParsedResult(result);
 
       if (result.matchedItems.length > 0) {
-        setOrderItems(result.matchedItems.map(item => ({ ...item })));
-        setVoiceState(VOICE_STATES.CONFIRMATION);
+        // Formulate item confirmation prompt
+        const itemsToConfirm = result.matchedItems.map(item => ({ ...item }));
+        setCandidateItems(itemsToConfirm);
+        candidateItemsRef.current = itemsToConfirm;
         setIsEditingManually(false);
 
-        const totalAmt = result.matchedItems.reduce((acc, curr) => acc + curr.subtotal, 0);
-        const itemSummary = result.matchedItems.map(i => `${i.quantity} ${i.dish.name}`).join(' and ');
-
-        // Natural spoken confirmation: "I heard 1 Masala Dosa and 2 Cold Coffees. Your total is 320 rupees. Is that correct?"
-        const spokenConfirmation = activeLanguage === 'kn-IN'
-          ? `ನಾನು ${result.matchedItems.map(i => `${i.dish.name} ${i.quantity}`).join(' ಮತ್ತು ')} ಕೇಳಿದೆ. ಒಟ್ಟು ಮೊತ್ತ ${totalAmt} ರೂಪಾಯಿಗಳು. ಇದು ಸರಿಯಾಗಿದೆಯೇ?`
-          : activeLanguage === 'hi-IN'
-          ? `मैंने ${result.matchedItems.map(i => `${i.quantity} ${i.dish.name}`).join(' और ')} सुना। कुल ${totalAmt} रुपये है। क्या यह सही है?`
-          : `I heard ${itemSummary}. Your total is ${totalAmt} rupees. Is that correct?`;
-
-        speakAndAutoListen(spokenConfirmation, activeLanguage);
+        const spokenConfirmation = formatOrderConfirmationPrompt(itemsToConfirm, currentLang);
+        speakAndAutoListen(spokenConfirmation, currentLang, VOICE_STATES.CONFIRMATION);
       } else {
-        setVoiceState(VOICE_STATES.ERROR);
+        const fallbackState = currentConfirmed.length > 0 ? VOICE_STATES.ASK_MORE : VOICE_STATES.ERROR;
+        setVoiceState(fallbackState);
+        voiceStateRef.current = fallbackState;
+
         if (result.unrecognizedItems.length > 0) {
-          const unNames = result.unrecognizedItems.map(u => u.query).join(', ');
-          const unMsg = `We could not find "${unNames}" on our menu. Please try saying your order again.`;
-          speakAndAutoListen(unMsg, activeLanguage);
+          const unMsg = formatUnknownItemPrompt(result.unrecognizedItems, currentLang);
+          speakAndAutoListen(unMsg, currentLang, fallbackState);
         } else {
-          const unkMsg = getConversationalResponse(INTENT_TYPES.UNKNOWN, activeLanguage);
-          speakAndAutoListen(unkMsg, activeLanguage);
+          const unkMsg = getConversationalResponse(INTENT_TYPES.UNKNOWN, currentLang);
+          speakAndAutoListen(unkMsg, currentLang, fallbackState);
         }
       }
-    }, 350);
+    }, 250);
   };
 
-  // Adjust line item quantity
-  const handleUpdateQty = (index, delta) => {
-    const updated = [...orderItems];
+  // Step 3 & 4: Confirm candidate item and ask "Would you like anything else?"
+  const confirmCandidateItem = () => {
+    const candidate = candidateItemsRef.current;
+    if (!candidate || candidate.length === 0) return;
+
+    // Merge confirmed items into accumulated order list exactly once
+    const updatedConfirmed = mergeOrderItems(confirmedItemsRef.current, candidate);
+    setConfirmedItems(updatedConfirmed);
+    confirmedItemsRef.current = updatedConfirmed;
+
+    // Clear candidate items
+    setCandidateItems([]);
+    candidateItemsRef.current = [];
+
+    // Advance to ASK_MORE state and ask prompt
+    setVoiceState(VOICE_STATES.ASK_MORE);
+    voiceStateRef.current = VOICE_STATES.ASK_MORE;
+
+    const currentLang = activeLanguageRef.current || activeLanguage;
+    const langConfig = SARVAM_SUPPORTED_LANGUAGES.find(l => l.code === currentLang) || SARVAM_SUPPORTED_LANGUAGES[0];
+    const askPrompt = langConfig.addedAskAnythingElse || "Added to your order. Would you like anything else?";
+
+    speakAndAutoListen(askPrompt, currentLang, VOICE_STATES.ASK_MORE);
+  };
+
+  // Step 10: Reject candidate item without losing previously confirmed items
+  const rejectCandidateItem = () => {
+    setCandidateItems([]);
+    candidateItemsRef.current = [];
+
+    setVoiceState(VOICE_STATES.LISTENING);
+    voiceStateRef.current = VOICE_STATES.LISTENING;
+
+    const currentLang = activeLanguageRef.current || activeLanguage;
+    const langConfig = SARVAM_SUPPORTED_LANGUAGES.find(l => l.code === currentLang) || SARVAM_SUPPORTED_LANGUAGES[0];
+    const rejectPrompt = langConfig.itemRejected || langConfig.askChange || "Okay. What would you like to order instead?";
+
+    speakAndAutoListen(rejectPrompt, currentLang, VOICE_STATES.LISTENING);
+  };
+
+  // Step 5: Resume listening for more food items while preserving existing order
+  const requestMoreItems = () => {
+    setVoiceState(VOICE_STATES.LISTENING);
+    voiceStateRef.current = VOICE_STATES.LISTENING;
+
+    const currentLang = activeLanguageRef.current || activeLanguage;
+    const langConfig = SARVAM_SUPPORTED_LANGUAGES.find(l => l.code === currentLang) || SARVAM_SUPPORTED_LANGUAGES[0];
+    const askWhatElse = langConfig.askWhatElse || "What else would you like to order?";
+
+    speakAndAutoListen(askWhatElse, currentLang, VOICE_STATES.LISTENING);
+  };
+
+  // Step 7 & 8: Finish voice-ordering session, add collected items to cart exactly once, and navigate to /cart
+  const finalizeSessionAndGoToCart = () => {
+    if (hasCommittedCartRef.current) return;
+    const itemsToAdd = confirmedItemsRef.current.length > 0 ? confirmedItemsRef.current : confirmedItems;
+    if (itemsToAdd.length === 0) return;
+
+    hasCommittedCartRef.current = true;
+    navigatedRef.current = true;
+    stopListening();
+
+    // 1. Add all accumulated confirmed items to CartContext exactly once
+    itemsToAdd.forEach(item => {
+      addItem(item.dish || item, item.quantity);
+    });
+
+    setVoiceState(VOICE_STATES.CONFIRMED);
+    voiceStateRef.current = VOICE_STATES.CONFIRMED;
+
+    // 2. Spoken confirmation
+    const currentLang = activeLanguageRef.current || activeLanguage;
+    const langConfig = SARVAM_SUPPORTED_LANGUAGES.find(l => l.code === currentLang) || SARVAM_SUPPORTED_LANGUAGES[0];
+    const successMessage = langConfig.orderFinalized || langConfig.orderConfirmed || "Your order is confirmed. Taking you to the cart to review.";
+
+    const triggerCartNavigation = () => {
+      navigate('/cart');
+    };
+
+    speakKioskSpeech(successMessage, currentLang, () => {
+      triggerCartNavigation();
+    });
+
+    // Fallback navigation timeout in case audio callback is blocked by browser
+    setTimeout(() => {
+      triggerCartNavigation();
+    }, 1500);
+  };
+
+  // Adjust confirmed item quantity
+  const handleUpdateQty = (index, delta, isCandidate = false) => {
+    if (isCandidate) {
+      const updated = [...candidateItems];
+      const newQty = updated[index].quantity + delta;
+      if (newQty <= 0) {
+        updated.splice(index, 1);
+      } else {
+        updated[index].quantity = newQty;
+        updated[index].subtotal = updated[index].dish.price * newQty;
+      }
+      setCandidateItems(updated);
+      candidateItemsRef.current = updated;
+      if (updated.length === 0) {
+        setVoiceState(confirmedItems.length > 0 ? VOICE_STATES.ASK_MORE : VOICE_STATES.IDLE);
+      }
+      return;
+    }
+
+    const updated = [...confirmedItems];
     const newQty = updated[index].quantity + delta;
     if (newQty <= 0) {
       updated.splice(index, 1);
@@ -275,53 +534,32 @@ export const KioskVoiceSection = ({
       updated[index].quantity = newQty;
       updated[index].subtotal = updated[index].dish.price * newQty;
     }
-    setOrderItems(updated);
+    setConfirmedItems(updated);
+    confirmedItemsRef.current = updated;
     if (updated.length === 0) {
       handleReset();
     }
   };
 
-  const handleRemoveItem = (index) => {
-    const updated = [...orderItems];
-    updated.splice(index, 1);
-    setOrderItems(updated);
-    if (updated.length === 0) {
-      handleReset();
-    }
-  };
-
-  // Confirm order and sync to cart
-  const confirmAndAddToCart = () => {
-    if (orderItems.length === 0) return;
-
-    orderItems.forEach(item => {
-      addItem(item.dish, item.quantity);
-    });
-
-    setVoiceState(VOICE_STATES.CONFIRMED);
-
-    const successMessage = activeLanguage === 'kn-IN'
-      ? 'ಉತ್ತಮ! ನಿಮ್ಮ ಆರ್ಡರ್ ಖಚಿತವಾಗಿದೆ ಮತ್ತು ಕಾರ್ಟ್‌ಗೆ ಸೇರಿಸಲಾಗಿದೆ.'
-      : activeLanguage === 'hi-IN'
-      ? 'बहुत बढ़िया! आपका ऑर्डर कन्फर्म हो गया है और कार्ट में जोड़ दिया गया है।'
-      : 'Perfect! Your order has been added to your cart.';
-
-    // Safe navigation helper that prevents duplicate calls
-    const triggerCartNavigation = () => {
-      if (!navigatedRef.current) {
-        navigatedRef.current = true;
-        navigate('/cart');
+  const handleRemoveItem = (index, isCandidate = false) => {
+    if (isCandidate) {
+      const updated = [...candidateItems];
+      updated.splice(index, 1);
+      setCandidateItems(updated);
+      candidateItemsRef.current = updated;
+      if (updated.length === 0) {
+        setVoiceState(confirmedItems.length > 0 ? VOICE_STATES.ASK_MORE : VOICE_STATES.IDLE);
       }
-    };
+      return;
+    }
 
-    speakKioskSpeech(successMessage, activeLanguage, () => {
-      triggerCartNavigation();
-    });
-
-    // Fallback navigation timeout in case audio callback is blocked by browser
-    setTimeout(() => {
-      triggerCartNavigation();
-    }, 1200);
+    const updated = [...confirmedItems];
+    updated.splice(index, 1);
+    setConfirmedItems(updated);
+    confirmedItemsRef.current = updated;
+    if (updated.length === 0) {
+      handleReset();
+    }
   };
 
   // Reset to Idle
@@ -330,11 +568,17 @@ export const KioskVoiceSection = ({
     setTranscript('');
     setInterimTranscript('');
     setParsedResult(null);
-    setOrderItems([]);
+    setConfirmedItems([]);
+    confirmedItemsRef.current = [];
+    setCandidateItems([]);
+    candidateItemsRef.current = [];
+    hasCommittedCartRef.current = false;
+    navigatedRef.current = false;
     setErrorMessage('');
     setManualInput('');
     setIsEditingManually(false);
     setVoiceState(VOICE_STATES.IDLE);
+    voiceStateRef.current = VOICE_STATES.IDLE;
   };
 
   // Manual Input Submit
@@ -345,7 +589,8 @@ export const KioskVoiceSection = ({
     processUserInput(manualInput);
   };
 
-  const totalCalculated = orderItems.reduce((acc, curr) => acc + curr.subtotal, 0);
+  const totalCalculated = confirmedItems.reduce((acc, curr) => acc + (curr.subtotal || 0), 0);
+  const candidateTotal = candidateItems.reduce((acc, curr) => acc + (curr.subtotal || 0), 0);
 
   return (
     <section className="kiosk-voice-hero-card" id="kiosk-voice-hero">
@@ -390,117 +635,168 @@ export const KioskVoiceSection = ({
           </div>
         </div>
 
-        {/* STATE 1: IDLE / SPEAKING / LISTENING */}
-        {(voiceState === VOICE_STATES.IDLE || voiceState === VOICE_STATES.SPEAKING || voiceState === VOICE_STATES.LISTENING) && (
+        {/* STATE 1: IDLE / READY TO ORDER */}
+        {voiceState === VOICE_STATES.IDLE && (
           <div className="kiosk-voice-idle-center">
-            {/* GIANT CENTRAL MICROPHONE / VOICE ORB */}
-            <div className="kiosk-giant-mic-wrapper">
-              <button
-                className={`kiosk-giant-mic-button ${voiceState === VOICE_STATES.LISTENING ? 'listening-mode' : ''} ${voiceState === VOICE_STATES.SPEAKING ? 'speaking-mode' : ''}`}
-                onClick={() => {
-                  if (voiceState === VOICE_STATES.LISTENING) {
-                    stopListening();
-                  } else {
-                    startListening();
-                  }
-                }}
-                aria-label="Voice Interaction"
-              >
-                <div className="mic-outer-ring" />
-                <div className="mic-inner-ring" />
-                <div className="mic-circle-core">
-                  <Mic size={56} className="mic-icon-svg" />
-                </div>
-              </button>
-              <div className="mic-action-caption">
-                <span className="mic-caption-main">
-                  {voiceState === VOICE_STATES.LISTENING ? "🔴 LISTENING..." : voiceState === VOICE_STATES.SPEAKING ? "🔊 SPEAKING..." : "🎤 TAP TO SPEAK"}
-                </span>
-              </div>
-            </div>
-
-            {/* Audio Waveform Equalizer when Listening */}
-            {voiceState === VOICE_STATES.LISTENING && (
-              <div className="kiosk-audio-equalizer">
-                <span className="eq-bar bar1" />
-                <span className="eq-bar bar2" />
-                <span className="eq-bar bar3" />
-                <span className="eq-bar bar4" />
-                <span className="eq-bar bar5" />
-                <span className="eq-bar bar6" />
-                <span className="eq-bar bar7" />
-                <span className="eq-bar bar8" />
-              </div>
-            )}
-
-            {/* Real-time Customer Transcript */}
-            {(interimTranscript || transcript) && (
-              <div className="kiosk-live-transcript-bubble">
-                <span className="transcript-user-tag">You said:</span>
-                <p className="bubble-text">"{interimTranscript || transcript}"</p>
-              </div>
-            )}
-
-            <p className="kiosk-instruction-text">
-              "Tell me what you'd like to order."
-            </p>
-
-            <div className="kiosk-example-tag">
-              <span className="example-label">Example:</span>
-              <span className="example-text">"One Masala Dosa and two Cold Coffees"</span>
-            </div>
-
-            {/* Secondary Touch Option */}
-            <div className="kiosk-or-browse-divider">
-              <div className="divider-line" />
-              <span className="divider-text">OR</span>
-              <div className="divider-line" />
-            </div>
-
             <button
-              className="btn btn-outline btn-lg kiosk-browse-menu-btn"
-              onClick={onOpenTouchMenu}
+              className="kiosk-mic-giant-button"
+              onClick={startListening}
+              aria-label="Start Voice Ordering"
             >
-              <Utensils size={18} /> Browse Menu
+              <Mic size={56} className="mic-svg-icon" />
+              <span className="mic-label-under">TAP TO SPEAK</span>
             </button>
-          </div>
-        )}
 
-        {/* STATE 2: PROCESSING */}
-        {voiceState === VOICE_STATES.PROCESSING && (
-          <div className="kiosk-voice-processing-center">
-            <div className="kiosk-simple-spinner">
-              <Sparkles size={36} className="animate-spin-slow" />
-            </div>
-            <h3 className="processing-main-text">Understanding your order...</h3>
-            <p className="processing-sub-text">Matching against kitchen menu</p>
-            <div className="kiosk-spoken-tag">
-              <span>"{transcript}"</span>
+            <div className="kiosk-voice-hint-box">
+              <Sparkles size={18} className="hint-sparkle" />
+              <p>
+                Try saying: <strong>"{currentLangConfig.tryExample}"</strong>
+              </p>
             </div>
           </div>
         )}
 
-        {/* STATE 3: ORDER CONFIRMATION / VOICE READ-BACK */}
+        {/* STATE 2: ACTIVE LISTENING & LIVE WAVE */}
+        {(voiceState === VOICE_STATES.LISTENING || voiceState === VOICE_STATES.PROCESSING || voiceState === VOICE_STATES.SPEAKING) && (
+          <div className="kiosk-voice-listening-center">
+            <button
+              className={`kiosk-mic-giant-button active-pulsing ${voiceState === VOICE_STATES.SPEAKING ? 'speaking' : ''}`}
+              onClick={voiceState === VOICE_STATES.LISTENING ? stopListening : startListening}
+              aria-label="Stop or Resume Microphone"
+            >
+              <span className="kiosk-wave-ring ring-1" />
+              <span className="kiosk-wave-ring ring-2" />
+              <span className="kiosk-wave-ring ring-3" />
+              <Mic size={56} className="mic-svg-icon animate-pulse" />
+              <span className="mic-label-under">
+                {voiceState === VOICE_STATES.SPEAKING ? 'SPEAKING...' : voiceState === VOICE_STATES.PROCESSING ? 'IDENTIFYING...' : 'LISTENING...'}
+              </span>
+            </button>
+
+            <div className="kiosk-live-transcript-card">
+              <span className="transcript-state-tag">
+                <Volume2 size={16} />
+                {voiceState === VOICE_STATES.PROCESSING
+                  ? 'Analyzing your order...'
+                  : voiceState === VOICE_STATES.CONFIRMATION
+                  ? currentLangConfig.listeningConfirmHint
+                  : voiceState === VOICE_STATES.ASK_MORE
+                  ? (currentLangConfig.listeningAskMoreHint || "Say 'Yes' to add more, or 'No' to finish")
+                  : currentLangConfig.listeningHint}
+              </span>
+              <p className="transcript-live-text">
+                "{interimTranscript || transcript || 'Speak naturally in ' + currentLangConfig.name + '...'}"
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* STATE 3: CANDIDATE ITEM CONFIRMATION / VOICE READ-BACK */}
         {voiceState === VOICE_STATES.CONFIRMATION && (
           <div className="kiosk-voice-confirmation-center">
             <div className="kiosk-confirmation-header">
-              <h2 className="confirm-main-title">Detected Order</h2>
+              <h2 className="confirm-main-title">
+                {formatOrderConfirmationPrompt(candidateItems, activeLanguage)}
+              </h2>
               <div className="confirm-voice-hint-pill">
-                <Mic size={15} /> <span>Say <strong>"Yes"</strong> to confirm or <strong>"No"</strong> to change</span>
+                <Mic size={15} /> <span>Say <strong>"Yes"</strong> to add to order or <strong>"No"</strong> to change</span>
               </div>
             </div>
 
-            {/* Order Items Table */}
+            {/* Candidate Items Card */}
             <div className="kiosk-confirm-card">
               <div className="kiosk-items-list">
-                {orderItems.map((item, idx) => (
+                {candidateItems.map((item, idx) => (
                   <div key={idx} className="kiosk-item-entry">
                     <div className="item-info-col">
                       <span className="item-dish-icon">
-                        {item.dish.categorySlug === 'beverages' ? '☕' : '🍽️'}
+                        {item.dish?.categorySlug === 'beverages' ? '☕' : '🍽️'}
                       </span>
                       <div>
-                        <strong className="item-dish-name">{item.dish.name}</strong>
+                        <strong className="item-dish-name">{item.dish?.name}</strong>
+                        {item.customizations && item.customizations.length > 0 && (
+                          <div className="item-cust-tags">
+                            {item.customizations.map((c, i) => (
+                              <span key={i} className="cust-pill">✨ {c}</span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="item-controls-col">
+                      <span className="item-qty-badge">× {item.quantity}</span>
+                      <span className="item-price-val">₹{item.subtotal}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Total Calculation */}
+              <div className="kiosk-total-row">
+                <span className="total-label">Item Total:</span>
+                <span className="total-amount">₹{candidateTotal}</span>
+              </div>
+            </div>
+
+            {/* If there are previously confirmed items, display order progress */}
+            {confirmedItems.length > 0 && (
+              <div className="kiosk-confirmed-summary-box" style={{ marginTop: '0.75rem', padding: '0.6rem 1rem', background: 'rgba(255,255,255,0.06)', borderRadius: '10px', fontSize: '0.9rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>Already in order: <strong>{confirmedItems.length} {confirmedItems.length === 1 ? 'dish' : 'dishes'}</strong></span>
+                <span>Current Total: <strong>₹{totalCalculated}</strong></span>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="kiosk-confirmation-actions-bar">
+              <button
+                className="btn btn-primary btn-lg kiosk-confirm-action-btn"
+                onClick={confirmCandidateItem}
+              >
+                <CheckCircle2 size={22} />
+                <span>CONFIRM ITEM (Say "Yes")</span>
+              </button>
+
+              <button
+                className="btn btn-outline btn-md"
+                onClick={rejectCandidateItem}
+              >
+                🔄 Change / Reject (Say "No")
+              </button>
+
+              <button
+                className="btn btn-ghost btn-md text-danger"
+                onClick={handleReset}
+              >
+                ❌ Cancel All
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* STATE 3B: MULTI-ITEM ORDER LIST & ASK ANYTHING ELSE */}
+        {voiceState === VOICE_STATES.ASK_MORE && (
+          <div className="kiosk-voice-confirmation-center">
+            <div className="kiosk-confirmation-header">
+              <h2 className="confirm-main-title">
+                {currentLangConfig.addedAskAnythingElse || "Added to your order! Would you like anything else?"}
+              </h2>
+              <div className="confirm-voice-hint-pill">
+                <Mic size={15} /> <span>Say <strong>"Yes"</strong> to order more, or <strong>"No"</strong> to finish and review cart</span>
+              </div>
+            </div>
+
+            {/* Confirmed Order Items Card */}
+            <div className="kiosk-confirm-card">
+              <div className="kiosk-items-list">
+                {confirmedItems.map((item, idx) => (
+                  <div key={idx} className="kiosk-item-entry">
+                    <div className="item-info-col">
+                      <span className="item-dish-icon">
+                        {item.dish?.categorySlug === 'beverages' ? '☕' : '🍽️'}
+                      </span>
+                      <div>
+                        <strong className="item-dish-name">{item.dish?.name}</strong>
                         {item.customizations && item.customizations.length > 0 && (
                           <div className="item-cust-tags">
                             {item.customizations.map((c, i) => (
@@ -548,30 +844,37 @@ export const KioskVoiceSection = ({
 
               {/* Total Calculation */}
               <div className="kiosk-total-row">
-                <span className="total-label">Total:</span>
+                <span className="total-label">Total ({confirmedItems.length} {confirmedItems.length === 1 ? 'item' : 'items'}):</span>
                 <span className="total-amount">₹{totalCalculated}</span>
               </div>
             </div>
 
-            {/* Fallback Action Buttons */}
+            {/* Action Buttons */}
             <div className="kiosk-confirmation-actions-bar">
               <button
                 className="btn btn-primary btn-lg kiosk-confirm-action-btn"
-                onClick={confirmAndAddToCart}
+                onClick={finalizeSessionAndGoToCart}
               >
-                <CheckCircle2 size={22} />
-                <span>CONFIRM ORDER (Say "Yes")</span>
+                <ShoppingBag size={20} />
+                <span>FINISH ORDER & VIEW CART (Say "No")</span>
               </button>
 
               <button
-                className={`btn btn-outline btn-md ${isEditingManually ? 'active' : ''}`}
+                className="btn btn-outline btn-md"
+                onClick={requestMoreItems}
+              >
+                ➕ ORDER MORE (Say "Yes")
+              </button>
+
+              <button
+                className={`btn btn-ghost btn-sm ${isEditingManually ? 'active' : ''}`}
                 onClick={() => setIsEditingManually(!isEditingManually)}
               >
-                ✏️ {isEditingManually ? 'Done Editing' : 'Change Order'}
+                ✏️ {isEditingManually ? 'Done Editing' : 'Edit Items'}
               </button>
 
               <button
-                className="btn btn-ghost btn-md text-danger"
+                className="btn btn-ghost btn-sm text-danger"
                 onClick={handleReset}
               >
                 ❌ Cancel
@@ -588,21 +891,15 @@ export const KioskVoiceSection = ({
             </div>
             <h2 className="confirmed-title">Order Confirmed!</h2>
             <p className="confirmed-sub">
-              Your dishes have been added to your cart for Table #{tableNumber}.
+              Your dishes have been added to your cart for Table #{tableNumber}. Taking you to checkout...
             </p>
 
             <div className="confirmed-actions-row">
               <button
-                className="btn btn-outline btn-lg"
-                onClick={handleReset}
-              >
-                <Mic size={18} /> Order More Dishes
-              </button>
-              <button
                 className="btn btn-primary btn-lg"
-                onClick={onOpenTouchMenu}
+                onClick={() => navigate('/cart')}
               >
-                <ShoppingBag size={18} /> Proceed to Pay
+                <ShoppingBag size={18} /> View Cart & Pay
               </button>
             </div>
           </div>
@@ -643,7 +940,7 @@ export const KioskVoiceSection = ({
             </div>
             <h3 className="error-main-title">Could not understand order</h3>
             <p className="error-sub-text">
-              {errorMessage || 'Please try speaking your order again or browse our touch menu.'}
+              {errorMessage || currentLangConfig.unknownItem}
             </p>
 
             <div className="error-actions-row">
@@ -670,7 +967,7 @@ export const KioskVoiceSection = ({
           <input
             type="text"
             className="kiosk-type-input"
-            placeholder={`Or type here in ${currentLangConfig.name} (e.g. 1 Masala Dosa, 2 Cold Coffee)...`}
+            placeholder={`Or type here in ${currentLangConfig.name} (e.g. 1 Masala Dosa, 1 Mango Lassi)...`}
             value={manualInput}
             onChange={(e) => setManualInput(e.target.value)}
           />

@@ -3,7 +3,6 @@ import { Link, useLocation } from 'react-router-dom';
 import { 
   Utensils, 
   ShoppingBag, 
-  QrCode, 
   Sparkles, 
   Menu as MenuIcon, 
   X, 
@@ -28,7 +27,6 @@ export const Navbar = () => {
     { path: '/', label: 'Kiosk Home', icon: <Monitor size={15} /> },
     { path: '/menu', label: 'Digital Menu', icon: <Utensils size={15} /> },
     { path: '/offers', label: 'Offers', badge: '🔥' },
-    { path: '/qr-access', label: 'Table QR', icon: <QrCode size={15} /> },
   ];
 
   const isActive = (path) => {

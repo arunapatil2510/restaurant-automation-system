@@ -29,9 +29,24 @@ export const menuItems = [
     isSpecial: true,
     prepTime: "10 min",
     rating: 4.8,
-    image: "https://images.unsplash.com/photo-1630383249896-424e482df921?w=600&h=400&fit=crop",
+    image: "https://images.unsplash.com/photo-1668236543090-82eba5ee5976?w=600&h=400&fit=crop",
     ingredients: ["Rice Batter", "Potato", "Mustard Seeds", "Curry Leaves", "Coconut", "Lentils"],
     dietaryTags: ["veg", "south-indian", "popular", "jain-option"]
+  },
+  {
+    id: "dish-samosa",
+    name: "Crispy Veg Samosa (2 Pcs)",
+    description: "Crispy golden fried pastry cones filled with spiced potatoes, green peas, and cashews, served with mint & tamarind chutneys.",
+    categorySlug: "starters",
+    price: 60,
+    type: "veg",
+    isAvailable: true,
+    isSpecial: true,
+    prepTime: "5 min",
+    rating: 4.9,
+    image: "https://images.unsplash.com/photo-1601050690597-df0568f70950?w=600&h=400&fit=crop",
+    ingredients: ["Refined Flour", "Spiced Potatoes", "Green Peas", "Garam Masala", "Mint Chutney", "Tamarind"],
+    dietaryTags: ["veg", "snacks", "popular", "street-food"]
   },
   {
     id: "dish-2",
@@ -44,7 +59,7 @@ export const menuItems = [
     isSpecial: false,
     prepTime: "15 min",
     rating: 4.6,
-    image: "https://images.unsplash.com/photo-1645177628172-a94c1f96e6db?w=600&h=400&fit=crop",
+    image: "/images/dishes/gobi-manchurian.jpg",
     ingredients: ["Cauliflower", "Cornflour", "Garlic", "Soy Sauce", "Green Chili", "Spring Onion"],
     dietaryTags: ["veg", "indo-chinese", "spicy", "popular"]
   },
@@ -88,7 +103,7 @@ export const menuItems = [
     isAvailable: true,
     isSpecial: false,
     prepTime: "10 min",
-    rating: 4.5,
+    rating: 4.7,
     image: "https://images.unsplash.com/photo-1573080496219-bb080dd4f877?w=600&h=400&fit=crop",
     ingredients: ["Potato", "Peri Peri Seasoning", "Refined Sunflower Oil", "Sea Salt"],
     dietaryTags: ["veg", "snacks", "spicy", "kids-favorite"]
@@ -119,7 +134,7 @@ export const menuItems = [
     isSpecial: false,
     prepTime: "8 min",
     rating: 4.7,
-    image: "https://images.unsplash.com/photo-1601050690597-df0568f70950?w=600&h=400&fit=crop",
+    image: "/images/dishes/butter-naan.jpg",
     ingredients: ["Refined Wheat Flour", "Milk", "Yeast", "Butter"],
     dietaryTags: ["veg", "breads", "popular"]
   },
@@ -209,7 +224,7 @@ export const menuItems = [
     isSpecial: true,
     prepTime: "30 min",
     rating: 4.9,
-    image: "https://images.unsplash.com/photo-1589302168068-964664d93dc0?w=600&h=400&fit=crop",
+    image: "https://images.unsplash.com/photo-1633945274405-b6c8069047b0?w=600&h=400&fit=crop",
     ingredients: ["Chicken", "Aged Basmati Rice", "Fried Onions", "Mint", "Ghee", "Yogurt", "Special Spices"],
     dietaryTags: ["nonveg", "biryani", "popular", "spicy"]
   },
@@ -239,7 +254,7 @@ export const menuItems = [
     isSpecial: false,
     prepTime: "5 min",
     rating: 4.9,
-    image: "https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=600&h=400&fit=crop",
+    image: "https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=600&h=400&fit=crop",
     ingredients: ["Fresh Coffee Decoction", "Boiled Whole Milk", "Sugar"],
     dietaryTags: ["veg", "hot-drink", "popular"]
   },
@@ -254,7 +269,7 @@ export const menuItems = [
     isSpecial: false,
     prepTime: "5 min",
     rating: 4.5,
-    image: "https://images.unsplash.com/photo-1571934811356-5cc061b6821f?w=600&h=400&fit=crop",
+    image: "https://images.unsplash.com/photo-1576092768241-dec231879fc3?w=600&h=400&fit=crop",
     ingredients: ["Assam Tea", "Fresh Ginger", "Cardamom", "Cloves", "Milk", "Sugar"],
     dietaryTags: ["veg", "hot-drink"]
   },
@@ -269,7 +284,7 @@ export const menuItems = [
     isSpecial: false,
     prepTime: "5 min",
     rating: 4.6,
-    image: "https://images.unsplash.com/photo-1621263764928-df1444c5e859?w=600&h=400&fit=crop",
+    image: "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?w=600&h=400&fit=crop",
     ingredients: ["Fresh Lime", "Mint Leaves", "Black Salt", "Chilled Water", "Sugar/Salt"],
     dietaryTags: ["veg", "cold-drink", "refreshing", "gluten-free"]
   },
@@ -289,6 +304,21 @@ export const menuItems = [
     dietaryTags: ["veg", "cold-drink", "dessert-drink"]
   },
   {
+    id: "dish-mango-lassi",
+    name: "Mango Lassi",
+    description: "Rich and creamy chilled yogurt shake blended with sweet Alphonso mango pulp and cardamom.",
+    categorySlug: "beverages",
+    price: 90,
+    type: "veg",
+    isAvailable: true,
+    isSpecial: true,
+    prepTime: "4 min",
+    rating: 4.9,
+    image: "https://images.unsplash.com/photo-1534353473418-4cfa6c56fd38?w=600&h=400&fit=crop",
+    ingredients: ["Fresh Yogurt", "Alphonso Mango Pulp", "Cardamom", "Sugar"],
+    dietaryTags: ["veg", "cold-drink", "popular", "special"]
+  },
+  {
     id: "dish-19",
     name: "Gulab Jamun (2 Pcs)",
     description: "Traditional golden fried milk solid dumplings soaked warm in fragrant cardamom and saffron sugar syrup.",
@@ -299,7 +329,7 @@ export const menuItems = [
     isSpecial: false,
     prepTime: "3 min",
     rating: 4.8,
-    image: "https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=600&h=400&fit=crop",
+    image: "/images/dishes/gulab-jamun.jpg",
     ingredients: ["Khoya / Mawa", "Cardamom Syrup", "Saffron", "Pistachio Garnish"],
     dietaryTags: ["veg", "sweet", "traditional", "popular"]
   },
@@ -310,35 +340,40 @@ export const menuItems = [
     categorySlug: "desserts",
     price: 160,
     type: "veg",
-    isAvailable: false,
-    isSpecial: false,
+    isAvailable: true,
+    isSpecial: true,
     prepTime: "8 min",
     rating: 4.9,
-    image: "https://images.unsplash.com/photo-1564355808539-22fda35bed7e?w=600&h=400&fit=crop",
-    ingredients: ["Dark Chocolate", "Walnuts", "Vanilla Bean Ice Cream", "Hot Chocolate Fudge"],
-    dietaryTags: ["veg", "dessert", "chocolate", "sold-out-demo"]
+    image: "https://images.unsplash.com/photo-1606313564200-e75d5e30476c?w=600&h=400&fit=crop",
+    ingredients: ["Dark Chocolate", "Brownie Base", "Vanilla Ice Cream", "Toasted Marshmallows", "Hot Fudge"],
+    dietaryTags: ["veg", "desserts", "bestseller", "kids-favorite"]
   }
 ];
 
-export const offers = [
+export const activeOffers = [
   {
-    code: "FLAT20",
-    title: "Flat 20% Off",
-    description: "Get 20% discount on all food & beverage orders above ₹300 (Max discount ₹100).",
-    discountType: "percentage",
-    discountValue: 20,
-    minOrderValue: 300,
-    maxDiscount: 100,
-    badge: "🔥 Most Popular"
-  },
-  {
-    code: "FESTIVE50",
-    title: "Festive ₹50 Off",
-    description: "Enjoy an instant flat ₹50 discount on total cart subtotal above ₹250.",
+    id: "offer-1",
+    code: "WELCOME50",
+    title: "Flat ₹50 OFF",
+    description: "Get ₹50 flat discount on orders above ₹299",
     discountType: "flat",
     discountValue: 50,
-    minOrderValue: 250,
-    maxDiscount: 50,
-    badge: "🎉 Special Deal"
+    minOrderValue: 299,
+    validUntil: "2026-12-31",
+    isAvailable: true,
+  },
+  {
+    id: "offer-2",
+    code: "FESTIVE20",
+    title: "20% Discount",
+    description: "Enjoy 20% off up to ₹100 on orders above ₹499",
+    discountType: "percentage",
+    discountValue: 20,
+    maxDiscount: 100,
+    minOrderValue: 499,
+    validUntil: "2026-12-31",
+    isAvailable: true,
   }
 ];
+
+export const offers = activeOffers;
