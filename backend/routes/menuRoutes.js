@@ -3,6 +3,17 @@ const router = express.Router();
 const MenuItem = require('../models/MenuItem');
 const Category = require('../models/Category');
 
+// Helper to validate HTTP or HTTPS URL format
+const isValidHttpUrl = (str) => {
+  if (typeof str !== 'string') return false;
+  try {
+    const parsed = new URL(str);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+};
+
 /**
  * @route   GET /api/menu
  * @desc    Get all menu items with optional category, type, search, and availability filters
@@ -387,6 +398,331 @@ router.post('/', authenticateAdmin, async (req, res) => {
       success: false,
       data: null,
       message: 'Server error while creating menu item',
+    });
+  }
+});
+
+/**
+ * @route   PUT /api/menu/:id
+ * @desc    Update an existing menu item (Admin)
+ * @access  Private (Admin)
+ */
+router.put('/:id', authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // 1. Validate MongoDB ObjectId format
+    if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        data: null,
+        message: `Invalid menu item ID format: '${id}'. Must be a 24-character hexadecimal ObjectId.`,
+      });
+    }
+
+    // 2. Reject empty body, non-object, or array
+    if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body) || Object.keys(req.body).length === 0) {
+      return res.status(400).json({
+        success: false,
+        data: null,
+        message: 'Request body cannot be empty.',
+      });
+    }
+
+    // 3. Strict allowlist - reject unpermitted fields (e.g. _id, categorySlug, createdAt, updatedAt, __v, rating)
+    const allowedFields = [
+      'name',
+      'description',
+      'categoryId',
+      'price',
+      'type',
+      'isAvailable',
+      'isSpecial',
+      'prepTime',
+      'image',
+      'ingredients',
+      'dietaryTags',
+    ];
+    const bodyKeys = Object.keys(req.body);
+    const unpermittedKeys = bodyKeys.filter((k) => !allowedFields.includes(k));
+    if (unpermittedKeys.length > 0) {
+      return res.status(400).json({
+        success: false,
+        data: null,
+        message: `Unpermitted field(s) in request body: ${unpermittedKeys.join(', ')}. Allowed fields: ${allowedFields.join(', ')}`,
+      });
+    }
+
+    // 4. Locate existing menu item
+    const existingItem = await MenuItem.findById(id);
+    if (!existingItem) {
+      return res.status(404).json({
+        success: false,
+        data: null,
+        message: `Menu item not found with ID '${id}'.`,
+      });
+    }
+
+    const {
+      name,
+      description,
+      categoryId,
+      price,
+      type,
+      isAvailable,
+      isSpecial,
+      prepTime,
+      image,
+      ingredients,
+      dietaryTags,
+    } = req.body;
+
+    const updateFields = {};
+
+    // 5. Validate name (if provided)
+    if (name !== undefined) {
+      if (typeof name !== 'string' || !name.trim()) {
+        return res.status(400).json({
+          success: false,
+          data: null,
+          message: 'name must be a non-empty string.',
+        });
+      }
+      const cleanName = name.trim();
+      if (cleanName.length > 100) {
+        return res.status(400).json({
+          success: false,
+          data: null,
+          message: 'name cannot exceed 100 characters.',
+        });
+      }
+      updateFields.name = cleanName;
+    }
+
+    // 6. Validate description (if provided)
+    if (description !== undefined) {
+      if (typeof description !== 'string' || !description.trim()) {
+        return res.status(400).json({
+          success: false,
+          data: null,
+          message: 'description must be a non-empty string.',
+        });
+      }
+      const cleanDescription = description.trim();
+      if (cleanDescription.length > 1000) {
+        return res.status(400).json({
+          success: false,
+          data: null,
+          message: 'description cannot exceed 1000 characters.',
+        });
+      }
+      updateFields.description = cleanDescription;
+    }
+
+    // 7. Validate categoryId (if provided) & auto-sync categorySlug
+    if (categoryId !== undefined) {
+      if (typeof categoryId !== 'string' || !categoryId.match(/^[0-9a-fA-F]{24}$/)) {
+        return res.status(400).json({
+          success: false,
+          data: null,
+          message: 'categoryId must be a valid 24-character hexadecimal ObjectId.',
+        });
+      }
+      const category = await Category.findById(categoryId);
+      if (!category) {
+        return res.status(400).json({
+          success: false,
+          data: null,
+          message: `Category not found with ID '${categoryId}'.`,
+        });
+      }
+      updateFields.categoryId = category._id;
+      updateFields.categorySlug = category.slug;
+    }
+
+    // 8. Validate price (if provided)
+    if (price !== undefined) {
+      if (typeof price !== 'number' || Number.isNaN(price) || !Number.isFinite(price) || price < 0) {
+        return res.status(400).json({
+          success: false,
+          data: null,
+          message: 'price must be a finite, non-negative number.',
+        });
+      }
+      updateFields.price = price;
+    }
+
+    // 9. Validate type (if provided)
+    if (type !== undefined) {
+      const validTypes = ['veg', 'nonveg', 'egg'];
+      if (typeof type !== 'string' || !validTypes.includes(type.toLowerCase().trim())) {
+        return res.status(400).json({
+          success: false,
+          data: null,
+          message: `type must be one of: ${validTypes.join(', ')}.`,
+        });
+      }
+      updateFields.type = type.toLowerCase().trim();
+    }
+
+    // 10. Validate isAvailable (if provided)
+    if (isAvailable !== undefined) {
+      if (typeof isAvailable !== 'boolean') {
+        return res.status(400).json({
+          success: false,
+          data: null,
+          message: "'isAvailable' must be a boolean (true or false).",
+        });
+      }
+      updateFields.isAvailable = isAvailable;
+    }
+
+    // 11. Validate isSpecial (if provided)
+    if (isSpecial !== undefined) {
+      if (typeof isSpecial !== 'boolean') {
+        return res.status(400).json({
+          success: false,
+          data: null,
+          message: "'isSpecial' must be a boolean (true or false).",
+        });
+      }
+      updateFields.isSpecial = isSpecial;
+    }
+
+    // 12. Validate prepTime (if provided)
+    if (prepTime !== undefined) {
+      if (typeof prepTime !== 'string' || !prepTime.trim()) {
+        return res.status(400).json({
+          success: false,
+          data: null,
+          message: 'prepTime must be a non-empty string.',
+        });
+      }
+      if (prepTime.trim().length > 50) {
+        return res.status(400).json({
+          success: false,
+          data: null,
+          message: 'prepTime cannot exceed 50 characters.',
+        });
+      }
+      updateFields.prepTime = prepTime.trim();
+    }
+
+    // 13. Validate image (if provided): must be valid HTTP/HTTPS URL or empty string
+    if (image !== undefined) {
+      if (typeof image !== 'string') {
+        return res.status(400).json({
+          success: false,
+          data: null,
+          message: 'image must be a string.',
+        });
+      }
+      const trimmedImage = image.trim();
+      if (trimmedImage.length > 0 && !isValidHttpUrl(trimmedImage)) {
+        return res.status(400).json({
+          success: false,
+          data: null,
+          message: 'image must be a valid HTTP or HTTPS URL, or an empty string.',
+        });
+      }
+      updateFields.image = trimmedImage;
+    }
+
+    // 14. Validate ingredients (if provided)
+    if (ingredients !== undefined) {
+      if (!Array.isArray(ingredients)) {
+        return res.status(400).json({
+          success: false,
+          data: null,
+          message: 'ingredients must be an array of strings.',
+        });
+      }
+      const cleanIngredients = [];
+      for (let i = 0; i < ingredients.length; i++) {
+        const ing = ingredients[i];
+        if (typeof ing !== 'string' || !ing.trim()) {
+          return res.status(400).json({
+            success: false,
+            data: null,
+            message: `ingredients[${i}] must be a non-empty string.`,
+          });
+        }
+        cleanIngredients.push(ing.trim());
+      }
+      updateFields.ingredients = cleanIngredients;
+    }
+
+    // 15. Validate dietaryTags (if provided)
+    if (dietaryTags !== undefined) {
+      if (!Array.isArray(dietaryTags)) {
+        return res.status(400).json({
+          success: false,
+          data: null,
+          message: 'dietaryTags must be an array of strings.',
+        });
+      }
+      const cleanDietaryTags = [];
+      for (let i = 0; i < dietaryTags.length; i++) {
+        const tag = dietaryTags[i];
+        if (typeof tag !== 'string' || !tag.trim()) {
+          return res.status(400).json({
+            success: false,
+            data: null,
+            message: `dietaryTags[${i}] must be a non-empty string.`,
+          });
+        }
+        cleanDietaryTags.push(tag.trim().toLowerCase());
+      }
+      updateFields.dietaryTags = cleanDietaryTags;
+    }
+
+    // 16. Require at least one valid field to update
+    if (Object.keys(updateFields).length === 0) {
+      return res.status(400).json({
+        success: false,
+        data: null,
+        message: 'At least one valid field to update must be provided.',
+      });
+    }
+
+    // 17. Atomic CAS update using version key (__v) to prevent concurrent lost updates
+    const casFilter = { _id: existingItem._id };
+    const updateDoc = {};
+
+    if (typeof existingItem.__v === 'number' && Number.isFinite(existingItem.__v)) {
+      casFilter.__v = existingItem.__v;
+      updateDoc.$set = updateFields;
+      updateDoc.$inc = { __v: 1 };
+    } else {
+      casFilter.$or = [{ __v: { $exists: false } }, { __v: null }];
+      updateDoc.$set = { ...updateFields, __v: 1 };
+    }
+
+    const updatedItem = await MenuItem.findOneAndUpdate(
+      casFilter,
+      updateDoc,
+      { new: true, runValidators: true }
+    ).populate('categoryId', 'name slug icon');
+
+    if (!updatedItem) {
+      return res.status(409).json({
+        success: false,
+        data: null,
+        message: 'Menu item was modified concurrently. Please refresh and try again.',
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Menu item updated successfully',
+      data: updatedItem,
+    });
+  } catch (error) {
+    console.error(`Error updating menu item ${req.params.id}:`, error.message);
+    res.status(500).json({
+      success: false,
+      data: null,
+      message: 'Server error while updating menu item',
     });
   }
 });
