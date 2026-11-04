@@ -124,6 +124,274 @@ const authenticateAdmin = (req, res, next) => {
 };
 
 /**
+ * @route   POST /api/menu
+ * @desc    Create a new menu item (Admin)
+ * @access  Private (Admin)
+ */
+router.post('/', authenticateAdmin, async (req, res) => {
+  try {
+    // 1. Reject empty body, non-object, or array
+    if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body) || Object.keys(req.body).length === 0) {
+      return res.status(400).json({
+        success: false,
+        data: null,
+        message: 'Request body cannot be empty.',
+      });
+    }
+
+    // 2. Reject arbitrary unpermitted fields
+    const allowedFields = [
+      'name',
+      'description',
+      'categoryId',
+      'price',
+      'type',
+      'isAvailable',
+      'isSpecial',
+      'prepTime',
+      'image',
+      'ingredients',
+      'dietaryTags',
+    ];
+    const bodyKeys = Object.keys(req.body);
+    const unpermittedKeys = bodyKeys.filter((k) => !allowedFields.includes(k));
+    if (unpermittedKeys.length > 0) {
+      return res.status(400).json({
+        success: false,
+        data: null,
+        message: `Unpermitted field(s) in request body: ${unpermittedKeys.join(', ')}. Allowed fields: ${allowedFields.join(', ')}`,
+      });
+    }
+
+    const {
+      name,
+      description,
+      categoryId,
+      price,
+      type,
+      isAvailable,
+      isSpecial,
+      prepTime,
+      image,
+      ingredients,
+      dietaryTags,
+    } = req.body;
+
+    // 3. Validate name: required non-empty string, max 100 chars
+    if (typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({
+        success: false,
+        data: null,
+        message: 'name is required and must be a non-empty string.',
+      });
+    }
+    const cleanName = name.trim();
+    if (cleanName.length > 100) {
+      return res.status(400).json({
+        success: false,
+        data: null,
+        message: 'name cannot exceed 100 characters.',
+      });
+    }
+
+    // 4. Validate description: required non-empty string, max 1000 chars
+    if (typeof description !== 'string' || !description.trim()) {
+      return res.status(400).json({
+        success: false,
+        data: null,
+        message: 'description is required and must be a non-empty string.',
+      });
+    }
+    const cleanDescription = description.trim();
+    if (cleanDescription.length > 1000) {
+      return res.status(400).json({
+        success: false,
+        data: null,
+        message: 'description cannot exceed 1000 characters.',
+      });
+    }
+
+    // 5. Validate categoryId: required 24-hex ObjectId, must reference existing Category
+    if (typeof categoryId !== 'string' || !categoryId.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        data: null,
+        message: 'categoryId must be a valid 24-character hexadecimal ObjectId.',
+      });
+    }
+
+    const category = await Category.findById(categoryId);
+    if (!category) {
+      return res.status(400).json({
+        success: false,
+        data: null,
+        message: `Category not found with ID '${categoryId}'.`,
+      });
+    }
+
+    // 6. Validate price: required finite non-negative number
+    if (typeof price !== 'number' || Number.isNaN(price) || !Number.isFinite(price) || price < 0) {
+      return res.status(400).json({
+        success: false,
+        data: null,
+        message: 'price is required and must be a finite, non-negative number.',
+      });
+    }
+
+    // 7. Validate type: optional enum ['veg', 'nonveg', 'egg'], defaults to 'veg'
+    let cleanType = 'veg';
+    if (type !== undefined) {
+      const validTypes = ['veg', 'nonveg', 'egg'];
+      if (typeof type !== 'string' || !validTypes.includes(type.toLowerCase().trim())) {
+        return res.status(400).json({
+          success: false,
+          data: null,
+          message: `type must be one of: ${validTypes.join(', ')}.`,
+        });
+      }
+      cleanType = type.toLowerCase().trim();
+    }
+
+    // 8. Validate isAvailable: optional boolean, defaults to true
+    let cleanIsAvailable = true;
+    if (isAvailable !== undefined) {
+      if (typeof isAvailable !== 'boolean') {
+        return res.status(400).json({
+          success: false,
+          data: null,
+          message: "'isAvailable' must be a boolean (true or false).",
+        });
+      }
+      cleanIsAvailable = isAvailable;
+    }
+
+    // 9. Validate isSpecial: optional boolean, defaults to false
+    let cleanIsSpecial = false;
+    if (isSpecial !== undefined) {
+      if (typeof isSpecial !== 'boolean') {
+        return res.status(400).json({
+          success: false,
+          data: null,
+          message: "'isSpecial' must be a boolean (true or false).",
+        });
+      }
+      cleanIsSpecial = isSpecial;
+    }
+
+    // 10. Validate prepTime: optional string, defaults to '15 min'
+    let cleanPrepTime = '15 min';
+    if (prepTime !== undefined) {
+      if (typeof prepTime !== 'string' || !prepTime.trim()) {
+        return res.status(400).json({
+          success: false,
+          data: null,
+          message: 'prepTime must be a non-empty string.',
+        });
+      }
+      if (prepTime.trim().length > 50) {
+        return res.status(400).json({
+          success: false,
+          data: null,
+          message: 'prepTime cannot exceed 50 characters.',
+        });
+      }
+      cleanPrepTime = prepTime.trim();
+    }
+
+    // 11. Validate image: optional string URL, defaults to ''
+    let cleanImage = '';
+    if (image !== undefined) {
+      if (typeof image !== 'string') {
+        return res.status(400).json({
+          success: false,
+          data: null,
+          message: 'image must be a string URL.',
+        });
+      }
+      cleanImage = image.trim();
+    }
+
+    // 12. Validate ingredients: optional array of strings, defaults to []
+    let cleanIngredients = [];
+    if (ingredients !== undefined) {
+      if (!Array.isArray(ingredients)) {
+        return res.status(400).json({
+          success: false,
+          data: null,
+          message: 'ingredients must be an array of strings.',
+        });
+      }
+      for (let i = 0; i < ingredients.length; i++) {
+        const ing = ingredients[i];
+        if (typeof ing !== 'string' || !ing.trim()) {
+          return res.status(400).json({
+            success: false,
+            data: null,
+            message: `ingredients[${i}] must be a non-empty string.`,
+          });
+        }
+        cleanIngredients.push(ing.trim());
+      }
+    }
+
+    // 13. Validate dietaryTags: optional array of strings, defaults to []
+    let cleanDietaryTags = [];
+    if (dietaryTags !== undefined) {
+      if (!Array.isArray(dietaryTags)) {
+        return res.status(400).json({
+          success: false,
+          data: null,
+          message: 'dietaryTags must be an array of strings.',
+        });
+      }
+      for (let i = 0; i < dietaryTags.length; i++) {
+        const tag = dietaryTags[i];
+        if (typeof tag !== 'string' || !tag.trim()) {
+          return res.status(400).json({
+            success: false,
+            data: null,
+            message: `dietaryTags[${i}] must be a non-empty string.`,
+          });
+        }
+        cleanDietaryTags.push(tag.trim().toLowerCase());
+      }
+    }
+
+    // 14. Create and save new MenuItem
+    const newMenuItem = new MenuItem({
+      name: cleanName,
+      description: cleanDescription,
+      categoryId: category._id,
+      categorySlug: category.slug,
+      price,
+      type: cleanType,
+      isAvailable: cleanIsAvailable,
+      isSpecial: cleanIsSpecial,
+      prepTime: cleanPrepTime,
+      image: cleanImage,
+      ingredients: cleanIngredients,
+      dietaryTags: cleanDietaryTags,
+    });
+
+    await newMenuItem.save();
+    await newMenuItem.populate('categoryId', 'name slug icon');
+
+    res.status(201).json({
+      success: true,
+      message: 'Menu item created successfully',
+      data: newMenuItem,
+    });
+  } catch (error) {
+    console.error('Error creating menu item:', error.message);
+    res.status(500).json({
+      success: false,
+      data: null,
+      message: 'Server error while creating menu item',
+    });
+  }
+});
+
+/**
  * @route   PATCH /api/menu/:id/availability
  * @desc    Update a menu item's availability (in-stock / sold-out)
  * @access  Private (Admin)
@@ -204,4 +472,3 @@ router.patch('/:id/availability', authenticateAdmin, async (req, res) => {
 });
 
 module.exports = router;
-
