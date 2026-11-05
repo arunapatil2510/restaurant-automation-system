@@ -60,6 +60,11 @@ const MenuItemSchema = new mongoose.Schema(
         lowercase: true,
       },
     ],
+    isDeleted: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
   },
   {
     timestamps: true,

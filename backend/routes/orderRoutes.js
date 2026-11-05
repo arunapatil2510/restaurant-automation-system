@@ -78,7 +78,10 @@ router.post('/', async (req, res) => {
         });
       }
 
-      const menuItem = await MenuItem.findById(item.menuItemId);
+      const menuItem = await MenuItem.findOne({
+        _id: item.menuItemId,
+        isDeleted: { $ne: true },
+      });
       if (!menuItem) {
         return res.status(404).json({
           success: false,

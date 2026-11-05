@@ -36,7 +36,7 @@ router.post('/chat', async (req, res) => {
     // 2. Retrieve Context (RAG)
     const [knowledgeDocs, menuItems] = await Promise.all([
       KnowledgeDoc.find({}),
-      MenuItem.find({ isAvailable: true }).populate('categoryId', 'name')
+      MenuItem.find({ isAvailable: true, isDeleted: { $ne: true } }).populate('categoryId', 'name')
     ]);
 
     // Format Knowledge Docs

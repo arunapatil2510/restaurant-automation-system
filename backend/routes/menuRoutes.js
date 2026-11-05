@@ -22,7 +22,7 @@ const isValidHttpUrl = (str) => {
 router.get('/', async (req, res) => {
   try {
     const { category, type, search, isAvailable, isSpecial, sort } = req.query;
-    const filter = {};
+    const filter = { isDeleted: { $ne: true } };
 
     // 1. Category Filter (by slug or ObjectId)
     if (category && category !== 'all') {
@@ -95,7 +95,7 @@ router.get('/:id', async (req, res) => {
     let item = null;
 
     if (id.match(/^[0-9a-fA-F]{24}$/)) {
-      item = await MenuItem.findById(id).populate('categoryId', 'name slug icon');
+      item = await MenuItem.findOne({ _id: id, isDeleted: { $ne: true } }).populate('categoryId', 'name slug icon');
     }
 
     if (!item) {
@@ -382,6 +382,7 @@ router.post('/', authenticateAdmin, async (req, res) => {
       image: cleanImage,
       ingredients: cleanIngredients,
       dietaryTags: cleanDietaryTags,
+      isDeleted: false,
     });
 
     await newMenuItem.save();
@@ -453,8 +454,8 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
       });
     }
 
-    // 4. Locate existing menu item
-    const existingItem = await MenuItem.findById(id);
+    // 4. Locate existing menu item (exclude soft-deleted)
+    const existingItem = await MenuItem.findOne({ _id: id, isDeleted: { $ne: true } });
     if (!existingItem) {
       return res.status(404).json({
         success: false,
@@ -686,7 +687,7 @@ router.put('/:id', authenticateAdmin, async (req, res) => {
     }
 
     // 17. Atomic CAS update using version key (__v) to prevent concurrent lost updates
-    const casFilter = { _id: existingItem._id };
+    const casFilter = { _id: existingItem._id, isDeleted: { $ne: true } };
     const updateDoc = {};
 
     if (typeof existingItem.__v === 'number' && Number.isFinite(existingItem.__v)) {
@@ -775,9 +776,9 @@ router.patch('/:id/availability', authenticateAdmin, async (req, res) => {
       });
     }
 
-    // 5. Update menu item in MongoDB
-    const updatedItem = await MenuItem.findByIdAndUpdate(
-      id,
+    // 5. Update menu item in MongoDB (excluding soft-deleted)
+    const updatedItem = await MenuItem.findOneAndUpdate(
+      { _id: id, isDeleted: { $ne: true } },
       { $set: { isAvailable } },
       { new: true, runValidators: true }
     ).populate('categoryId', 'name slug icon');
@@ -803,6 +804,56 @@ router.patch('/:id/availability', authenticateAdmin, async (req, res) => {
       success: false,
       data: null,
       message: 'Server error while updating menu item availability',
+    });
+  }
+});
+
+/**
+ * @route   DELETE /api/menu/:id
+ * @desc    Soft-delete an existing menu item (Admin)
+ * @access  Private (Admin)
+ */
+router.delete('/:id', authenticateAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // 1. Validate MongoDB ObjectId format
+    if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        data: null,
+        message: `Invalid menu item ID format: '${id}'. Must be a 24-character hexadecimal ObjectId.`,
+      });
+    }
+
+    // 2. Atomic soft-delete: set isDeleted to true and isAvailable to false
+    const deletedItem = await MenuItem.findOneAndUpdate(
+      { _id: id, isDeleted: { $ne: true } },
+      { $set: { isDeleted: true, isAvailable: false } },
+      { new: true }
+    ).populate('categoryId', 'name slug icon');
+
+    // 3. Return 404 if item does not exist or was already deleted
+    if (!deletedItem) {
+      return res.status(404).json({
+        success: false,
+        data: null,
+        message: `Menu item not found with ID '${id}'.`,
+      });
+    }
+
+    // 4. Successful response
+    res.status(200).json({
+      success: true,
+      message: 'Menu item deleted successfully',
+      data: deletedItem,
+    });
+  } catch (error) {
+    console.error(`Error deleting menu item ${req.params.id}:`, error.message);
+    res.status(500).json({
+      success: false,
+      data: null,
+      message: 'Server error while deleting menu item',
     });
   }
 });
