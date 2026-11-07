@@ -1,4 +1,6 @@
+
 require('dotenv').config();
+
 const express = require('express');
 const cors = require('cors');
 const connectDB = require('./config/db');
@@ -10,6 +12,7 @@ const offerRoutes = require('./routes/offerRoutes');
 const orderRoutes = require('./routes/orderRoutes');
 const kitchenOrderRoutes = require('./routes/kitchenOrderRoutes');
 const voiceRoutes = require('./routes/voiceRoutes');
+const adminRoutes = require('./routes/adminRoutes');
 
 // Initialize Express App
 const app = express();
@@ -19,10 +22,14 @@ connectDB();
 
 // Middleware
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  origin: [
+    'http://localhost:5173',
+    'http://localhost:5174',
+  ],
   credentials: true,
 }));
-app.use(express.json({ limit: '25mb' })); // Support base64 audio payloads
+
+app.use(express.json({ limit: '25mb' }));
 
 // API Routes
 app.use('/api/categories', categoryRoutes);
@@ -31,6 +38,7 @@ app.use('/api/offers', offerRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/kitchen/orders', kitchenOrderRoutes);
 app.use('/api/voice', voiceRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Health Check Endpoint
 app.get('/api/health', (req, res) => {
@@ -45,10 +53,12 @@ app.get('/api/health', (req, res) => {
 
 // Root Status Route
 app.get('/', (req, res) => {
-  res.send('RESTOSMART Restaurant Automation API Server is running. Access API endpoints under /api/*');
+  res.send(
+    'RESTOSMART Restaurant Automation API Server is running. Access API endpoints under /api/*'
+  );
 });
 
-// 404 Handler for undefined API routes
+// 404 Handler
 app.use((req, res) => {
   res.status(404).json({
     success: false,
@@ -66,6 +76,7 @@ const server = app.listen(PORT, () => {
   console.log(`   Menu API: http://localhost:${PORT}/api/menu`);
   console.log(`   Offers API: http://localhost:${PORT}/api/offers`);
   console.log(`   Orders API: http://localhost:${PORT}/api/orders`);
+  console.log(`   Admin Login API: http://localhost:${PORT}/api/admin/login`);
 });
 
 module.exports = { app, server };

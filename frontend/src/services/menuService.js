@@ -151,3 +151,37 @@ export const validateCoupon = async (code, subtotal) => {
 export const getRestaurantInfo = async () => {
   return Promise.resolve({ ...restaurantInfo });
 };
+
+/**
+ * Create a new menu item (Admin)
+ */
+export const createMenuItem = async (itemData) => {
+  const response = await api.post('/menu', itemData);
+  return normalizeItem(response.data.data);
+};
+
+/**
+ * Update an existing menu item (Admin)
+ */
+export const updateMenuItem = async (id, itemData) => {
+  const response = await api.put(`/menu/${id}`, itemData);
+  return normalizeItem(response.data.data);
+};
+
+/**
+ * Update menu item availability (Admin)
+ */
+export const updateMenuAvailability = async (id, isAvailable) => {
+  const response = await api.patch(`/menu/${id}/availability`, {
+    isAvailable,
+  });
+  return normalizeItem(response.data.data);
+};
+
+/**
+ * Soft-delete a menu item (Admin)
+ */
+export const deleteMenuItem = async (id) => {
+  const response = await api.delete(`/menu/${id}`);
+  return response.data;
+};

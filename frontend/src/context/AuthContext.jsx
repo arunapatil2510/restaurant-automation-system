@@ -1,4 +1,6 @@
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import api from '../services/api';
 
 const AuthContext = createContext(null);
 
@@ -15,68 +17,100 @@ export const AuthProvider = ({ children }) => {
     }
   });
 
-  const isAuthenticated = Boolean(adminUser);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
 
-  // Sync to sessionStorage
+  // Verify saved admin session with backend
   useEffect(() => {
-    if (adminUser) {
-      sessionStorage.setItem(ADMIN_STORAGE_KEY, JSON.stringify(adminUser));
-      sessionStorage.setItem(ADMIN_KEY_STORAGE, adminUser.passkey || 'restoAdmin2026');
-    } else {
-      sessionStorage.removeItem(ADMIN_STORAGE_KEY);
-      sessionStorage.removeItem(ADMIN_KEY_STORAGE);
-    }
-  }, [adminUser]);
+    const verifySession = async () => {
+      const savedKey = sessionStorage.getItem(ADMIN_KEY_STORAGE);
+      const savedUser = sessionStorage.getItem(ADMIN_STORAGE_KEY);
 
-  // Demo / Student-project authentication handler
-  const login = async (usernameOrEmail, password) => {
-    const cleanUser = (usernameOrEmail || '').trim().toLowerCase();
-    const cleanPass = (password || '').trim();
+      if (!savedKey || !savedUser) {
+        sessionStorage.removeItem(ADMIN_KEY_STORAGE);
+        sessionStorage.removeItem(ADMIN_STORAGE_KEY);
+        setAdminUser(null);
+        setAuthLoading(false);
+        return;
+      }
 
-    if (!cleanUser) {
-      return { success: false, message: 'Please enter your username or email.' };
-    }
-    if (!cleanPass) {
-      return { success: false, message: 'Please enter your password.' };
-    }
-
-    // Demo credentials verification (Accepts admin credentials or valid format for local demo)
-    if (cleanUser === 'admin' || cleanUser === 'admin@restosmart.com' || cleanUser.includes('admin')) {
-      const userObj = {
-        username: cleanUser,
-        name: 'Restaurant Manager',
-        email: cleanUser.includes('@') ? cleanUser : 'admin@restosmart.com',
-        role: 'Admin / Manager',
-        passkey: cleanPass,
-        loginTime: new Date().toISOString(),
-      };
-      setAdminUser(userObj);
-      return { success: true };
-    }
-
-    // Default valid login for student demo testing
-    const userObj = {
-      username: cleanUser,
-      name: cleanUser.charAt(0).toUpperCase() + cleanUser.slice(1),
-      email: cleanUser.includes('@') ? cleanUser : `${cleanUser}@restosmart.com`,
-      role: 'Staff Member',
-      passkey: cleanPass,
-      loginTime: new Date().toISOString(),
+      try {
+        await api.get('/admin/verify');
+        setIsAuthenticated(true);
+      } catch {
+        sessionStorage.removeItem(ADMIN_KEY_STORAGE);
+        sessionStorage.removeItem(ADMIN_STORAGE_KEY);
+        setAdminUser(null);
+        setIsAuthenticated(false);
+      } finally {
+        setAuthLoading(false);
+      }
     };
-    setAdminUser(userObj);
-    return { success: true };
+
+    verifySession();
+  }, []);
+
+  // Login through backend API
+  const login = async (usernameOrEmail, password) => {
+    const username = (usernameOrEmail || '').trim();
+
+    if (!username || !password || !password.trim()) {
+      return {
+        success: false,
+        message: 'Username and password are required.',
+      };
+    }
+
+    try {
+      const response = await api.post('/admin/login', {
+        username,
+        password,
+      });
+
+      const result = response.data;
+
+      if (!result.success || !result.data?.adminKey) {
+        return {
+          success: false,
+          message: result.message || 'Authentication failed.',
+        };
+      }
+
+      const { adminKey, ...userProfile } = result.data;
+
+      sessionStorage.setItem(ADMIN_KEY_STORAGE, adminKey);
+      sessionStorage.setItem(
+        ADMIN_STORAGE_KEY,
+        JSON.stringify(userProfile)
+      );
+
+      setAdminUser(userProfile);
+      setIsAuthenticated(true);
+
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        message:
+          error.response?.data?.message ||
+          'Unable to connect to the backend.',
+      };
+    }
   };
 
+  // Logout
   const logout = () => {
-    setAdminUser(null);
     sessionStorage.removeItem(ADMIN_STORAGE_KEY);
     sessionStorage.removeItem(ADMIN_KEY_STORAGE);
+    setAdminUser(null);
+    setIsAuthenticated(false);
   };
 
   return (
     <AuthContext.Provider
       value={{
         isAuthenticated,
+        authLoading,
         adminUser,
         login,
         logout,
@@ -89,8 +123,10 @@ export const AuthProvider = ({ children }) => {
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
+
   if (!context) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
+
   return context;
 };

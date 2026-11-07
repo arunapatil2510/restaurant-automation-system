@@ -3,6 +3,7 @@ const router = express.Router();
 const mongoose = require('mongoose');
 const Order = require('../models/Order');
 const MenuItem = require('../models/MenuItem');
+const KitchenOrder = require('../models/KitchenOrder');
 
 /**
  * @route   POST /api/orders
@@ -90,6 +91,14 @@ router.post('/', async (req, res) => {
     });
 
     const savedOrder = await newOrder.save();
+    // Create corresponding kitchen order
+    const kitchenOrder = new KitchenOrder({
+      orderId: savedOrder.orderNumber,
+      items: savedOrder.items,
+      status: 'Pending',
+    });
+
+    await kitchenOrder.save();
 
     res.status(201).json({
       success: true,

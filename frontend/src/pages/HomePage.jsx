@@ -1,16 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { 
-  Utensils, 
-  QrCode, 
-  Sparkles, 
-  Clock, 
-  ShieldCheck, 
-  ArrowRight, 
-  MapPin, 
-  Tag, 
-  Mic, 
-  Flame, 
+import {
+  Utensils,
+  QrCode,
+  Sparkles,
+  Clock,
+  ShieldCheck,
+  ArrowRight,
+  MapPin,
+  Tag,
+  Mic,
+  Flame,
   CheckCircle2,
   ChevronRight,
   AlertCircle,
@@ -31,14 +31,14 @@ import { useCart } from '../context/CartContext';
 
 export const HomePage = () => {
   const navigate = useNavigate();
-  const { 
-    tableNumber, 
-    setTableNumber, 
-    totalItems, 
-    totalAmount, 
-    addItem, 
-    kioskLanguage, 
-    setKioskLanguage 
+  const {
+    tableNumber,
+    setTableNumber,
+    totalItems,
+    totalAmount,
+    addItem,
+    kioskLanguage,
+    setKioskLanguage
   } = useCart();
 
   const [restaurant, setRestaurant] = useState(null);
@@ -84,8 +84,7 @@ export const HomePage = () => {
     loadKioskData();
   }, []);
 
-  const currentLang = SUPPORTED_LANGUAGES.find((l) => l.code === selectedLanguage) || SUPPORTED_LANGUAGES[0];
-
+  const currentLang = SUPPORTED_LANGUAGES.find((l) => l.code === kioskLanguage) || SUPPORTED_LANGUAGES[0];
   const scrollToTouchMenu = () => {
     if (touchMenuRef.current) {
       touchMenuRef.current.scrollIntoView({ behavior: 'smooth' });
