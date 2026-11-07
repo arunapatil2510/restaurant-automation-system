@@ -101,20 +101,25 @@ const CANCEL_PATTERNS = [
 ];
 
 const MODIFY_PATTERNS = [
-  /^(change|modify|change order|modify order|edit|edit order|change it)$/i,
-  /^(ಬದಲಾಯಿಸಿ|ಬದಲಿಸಿ)$/i,
-  /^(बदलो|बदलना है|ऑर्डर बदलो)$/i
+  /(change|modify|change order|modify order|edit|edit order|change it)/i,
+  /(ಬದಲಾಯಿಸಿ|ಬದಲಿಸಿ|ಬದಲು)/i,
+  /(बदलो|बदलना है|ऑर्डर बदलो|बदल)/i
 ];
 
 export const isAffirmative = (clean = '') => {
   return CONFIRM_PATTERNS.some(regex => regex.test(clean)) ||
-    /^(yes|yeah|yep|sure|ok|okay|add more|one more|more|want more|confirm|proceed|correct)$/i.test(clean) ||
+    /^(yes|yeah|yep|sure|ok|okay|add more|one more|more|want more|confirm|proceed|correct)\b/i.test(clean) ||
+    /^(ಹೌದು|ಸರಿ|ಖಚಿತಪಡಿಸಿ|ಖಚಿತ|ಸರಿಯಾಗಿದೆ|ಆಯಿತು|ಹಾ)/i.test(clean) ||
+    /^(हाँ|हाँजी|हाँ जी|सही|कन्फर्म|ठीक है|हां)/i.test(clean) ||
     clean === 'yes' || clean === 'haudu' || clean === 'haan' || clean === 'sari' || clean === 'sahi';
 };
 
 export const isNegative = (clean = '') => {
   return CANCEL_PATTERNS.some(regex => regex.test(clean)) ||
-    /^(no|nope|nothing|nothing else|no thanks|no more|thats all|that's all|done|finish|finished|checkout|go to cart|view cart|all done|i am done|im done|stop|cancel)$/i.test(clean) ||
+    /^(no|nope|nothing|nothing else|no thanks|no more|thats all|that's all|done|finish|finished|checkout|go to cart|view cart|all done|i am done|im done|stop|cancel)\b/i.test(clean) ||
+    /^(ಬೇಡ|ರದ್ದು|ತಪ್ಪು|ಮತ್ತೆ|ಇನ್ನೇನು ಬೇಡ|ಸಾಕು|ಅಷ್ಟೇ|ಮುಗಿಯಿತು)/i.test(clean) ||
+    /^(नहीं|रद्द|गलत|वापस|कैंसिल|मत करो|हटाओ|कुछ नहीं|और नहीं|बस|काफी है)/i.test(clean) ||
+    clean.includes('change it') || clean.includes('ಬದಲಾಯಿಸಿ') || clean.includes('ಬದಲಿಸಿ') || clean.includes('बदलो') || clean.includes('बदल') ||
     clean === 'no' || clean === 'nahi' || clean === 'beda' || clean === 'saaku' || clean === 'bas' || clean === 'kuch nahi';
 };
 

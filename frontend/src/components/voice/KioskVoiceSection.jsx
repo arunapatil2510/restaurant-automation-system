@@ -31,6 +31,7 @@ import {
   getSpeechRecognitionErrorMessage
 } from '../../utils/multilingualVoiceEngine.js';
 import { matchVoiceOrderWithMenu, mergeOrderItems } from '../../utils/voiceParser.js';
+import { parseVoiceIntent } from '../../services/voiceIntentService.js';
 import { 
   classifyIntent, 
   INTENT_TYPES, 
@@ -87,6 +88,7 @@ export const KioskVoiceSection = ({
   const confirmedItemsRef = useRef(confirmedItems);
   const candidateItemsRef = useRef(candidateItems);
   const activeLanguageRef = useRef(activeLanguage);
+  const isParsingRef = useRef(false);
 
   // Keep refs synchronized on every render
   useEffect(() => {
@@ -316,8 +318,8 @@ export const KioskVoiceSection = ({
   };
 
   // Main Intent & Food Processing Pipeline (CONTINUOUS MULTI-ITEM CONVERSATION)
-  const processUserInput = (text) => {
-    if (!text || !text.trim() || isSpeakingRef.current) return;
+  const processUserInput = async (text) => {
+    if (!text || !text.trim() || isSpeakingRef.current || isParsingRef.current) return;
 
     stopListening();
 
@@ -351,7 +353,7 @@ export const KioskVoiceSection = ({
         return;
       }
 
-      // 1C. Customer directly speaks a new food item -> fall through to food matching below!
+      // 1C. Customer directly speaks a new food item -> fall through to intent service below!
     }
 
     // 2. STAGE: Confirming a candidate item ("Shall I add it to your order?") (VOICE_STATES.CONFIRMATION)
@@ -385,37 +387,79 @@ export const KioskVoiceSection = ({
       return;
     }
 
-    // 5. Food Order Intent -> Ground against active menu
+    // 5. Intelligent Intent Parsing & Menu Grounding via Shared Gemini Service
     setVoiceState(VOICE_STATES.PROCESSING);
     voiceStateRef.current = VOICE_STATES.PROCESSING;
+    isParsingRef.current = true;
 
-    setTimeout(() => {
-      const result = matchVoiceOrderWithMenu(text, menuItems, currentLang);
+    try {
+      const result = await parseVoiceIntent({
+        text,
+        language: currentLang,
+        menuItems,
+        context: currentStage
+      });
       setParsedResult(result);
 
-      if (result.matchedItems.length > 0) {
-        // Formulate item confirmation prompt
-        const itemsToConfirm = result.matchedItems.map(item => ({ ...item }));
-        setCandidateItems(itemsToConfirm);
-        candidateItemsRef.current = itemsToConfirm;
-        setIsEditingManually(false);
+      if (result.intent === 'ORDER') {
+        if (result.items && result.items.length > 0) {
+          const itemsToConfirm = result.items.map(item => ({ ...item }));
+          setCandidateItems(itemsToConfirm);
+          candidateItemsRef.current = itemsToConfirm;
+          setIsEditingManually(false);
 
-        const spokenConfirmation = formatOrderConfirmationPrompt(itemsToConfirm, currentLang);
-        speakAndAutoListen(spokenConfirmation, currentLang, VOICE_STATES.CONFIRMATION);
-      } else {
-        const fallbackState = currentConfirmed.length > 0 ? VOICE_STATES.ASK_MORE : VOICE_STATES.ERROR;
-        setVoiceState(fallbackState);
-        voiceStateRef.current = fallbackState;
-
-        if (result.unrecognizedItems.length > 0) {
-          const unMsg = formatUnknownItemPrompt(result.unrecognizedItems, currentLang);
-          speakAndAutoListen(unMsg, currentLang, fallbackState);
+          const spokenConfirmation = result.response || formatOrderConfirmationPrompt(itemsToConfirm, currentLang);
+          speakAndAutoListen(spokenConfirmation, currentLang, VOICE_STATES.CONFIRMATION);
         } else {
-          const unkMsg = getConversationalResponse(INTENT_TYPES.UNKNOWN, currentLang);
-          speakAndAutoListen(unkMsg, currentLang, fallbackState);
+          const fallbackState = currentConfirmed.length > 0 ? VOICE_STATES.ASK_MORE : VOICE_STATES.ERROR;
+          setVoiceState(fallbackState);
+          voiceStateRef.current = fallbackState;
+
+          const spokenMsg = result.response || (result.unrecognizedItems?.length > 0
+            ? formatUnknownItemPrompt(result.unrecognizedItems, currentLang)
+            : getConversationalResponse(INTENT_TYPES.UNKNOWN, currentLang));
+          speakAndAutoListen(spokenMsg, currentLang, fallbackState);
         }
+      } else if (result.intent === 'CONFIRM') {
+        if (candidateItemsRef.current.length > 0) {
+          confirmCandidateItem();
+        } else if (currentConfirmed.length > 0) {
+          finalizeSessionAndGoToCart();
+        } else {
+          speakAndAutoListen(result.response || langConfig.greeting, currentLang, VOICE_STATES.LISTENING);
+        }
+      } else if (result.intent === 'CANCEL' || result.intent === 'MODIFY') {
+        if (candidateItemsRef.current.length > 0) {
+          rejectCandidateItem();
+        } else if (currentConfirmed.length > 0) {
+          finalizeSessionAndGoToCart();
+        } else {
+          speakAndAutoListen(result.response || langConfig.askChange, currentLang, VOICE_STATES.IDLE);
+        }
+      } else if (result.intent === 'FINISH_ORDER') {
+        if (currentConfirmed.length > 0) {
+          finalizeSessionAndGoToCart();
+        } else {
+          speakAndAutoListen(result.response, currentLang, VOICE_STATES.IDLE);
+        }
+      } else if (result.intent === 'ADD_MORE') {
+        requestMoreItems();
+      } else {
+        // Conversational / Recommendations / Menu Queries / Unknown
+        const returnState = currentConfirmed.length > 0 && currentVoiceState === VOICE_STATES.ASK_MORE
+          ? VOICE_STATES.ASK_MORE
+          : VOICE_STATES.LISTENING;
+        speakAndAutoListen(result.response || getConversationalResponse(INTENT_TYPES.UNKNOWN, currentLang), currentLang, returnState);
       }
-    }, 250);
+    } catch (err) {
+      console.warn('[KioskVoiceSection] Error during intent parsing:', err);
+      const fallbackState = currentConfirmed.length > 0 ? VOICE_STATES.ASK_MORE : VOICE_STATES.ERROR;
+      setVoiceState(fallbackState);
+      voiceStateRef.current = fallbackState;
+      speakAndAutoListen(getConversationalResponse(INTENT_TYPES.UNKNOWN, currentLang), currentLang, fallbackState);
+    } finally {
+      isParsingRef.current = false;
+    }
   };
 
   // Step 3 & 4: Confirm candidate item and ask "Would you like anything else?"
@@ -669,7 +713,7 @@ export const KioskVoiceSection = ({
               <span className="kiosk-wave-ring ring-3" />
               <Mic size={56} className="mic-svg-icon animate-pulse" />
               <span className="mic-label-under">
-                {voiceState === VOICE_STATES.SPEAKING ? 'SPEAKING...' : voiceState === VOICE_STATES.PROCESSING ? 'IDENTIFYING...' : 'LISTENING...'}
+                {voiceState === VOICE_STATES.SPEAKING ? 'SPEAKING...' : voiceState === VOICE_STATES.PROCESSING ? 'UNDERSTANDING ORDER...' : 'LISTENING...'}
               </span>
             </button>
 
@@ -677,7 +721,7 @@ export const KioskVoiceSection = ({
               <span className="transcript-state-tag">
                 <Volume2 size={16} />
                 {voiceState === VOICE_STATES.PROCESSING
-                  ? 'Analyzing your order...'
+                  ? 'Understanding your order...'
                   : voiceState === VOICE_STATES.CONFIRMATION
                   ? currentLangConfig.listeningConfirmHint
                   : voiceState === VOICE_STATES.ASK_MORE

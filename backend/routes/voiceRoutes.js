@@ -175,6 +175,7 @@ router.post('/sarvam-tts', async (req, res) => {
   }
 });
 
+const mongoose = require('mongoose');
 const MenuItem = require('../models/MenuItem');
 const KnowledgeDoc = require('../models/KnowledgeDoc');
 const { GoogleGenAI } = require('@google/genai');
@@ -192,8 +193,8 @@ const buildGroundedFallbackResponse = (text, language = 'en-IN', menuItems = [],
     const msg = language === 'kn-IN'
       ? 'ನಿಮ್ಮ ಆರ್ಡರ್‌ಗೆ ಸೇರಿಸಲಾಗಿದೆ. ಕಾರ್ಟ್‌ಗೆ ಕರೆದೊಯ್ಯಲಾಗುತ್ತಿದೆ.'
       : language === 'hi-IN'
-      ? 'आपके ऑर्डर में जोड़ दिया गया है। कार्ट पर ले जा रहे हैं।'
-      : 'Added to your order. Taking you to the cart.';
+        ? 'आपके ऑर्डर में जोड़ दिया गया है। कार्ट पर ले जा रहे हैं।'
+        : 'Added to your order. Taking you to the cart.';
     return { success: true, intent, items: [], unrecognizedItems: [], confidence: 0.98, response: msg, provider: 'gemini_ai_fallback' };
   }
   if (/^(no|cancel|stop|reset|clear|beda|nahi|ಬೇಡ|ರದ್ದು|ತಪ್ಪು|नहीं|रद्द|गलत)/i.test(lower) || lower.includes('change it') || lower.includes('change') || lower.includes('modify') || lower.includes('ಬದಲಾಯಿಸಿ') || lower.includes('बदलो')) {
@@ -201,8 +202,8 @@ const buildGroundedFallbackResponse = (text, language = 'en-IN', menuItems = [],
     const msg = language === 'kn-IN'
       ? 'ಸರಿ. ನೀವು ಏನನ್ನು ಆರ್ಡರ್ ಮಾಡಲು ಬಯಸುತ್ತೀರಿ?'
       : language === 'hi-IN'
-      ? 'ठीक है। आप क्या ऑर्डर करना चाहेंगे?'
-      : 'Okay. What would you like to order instead?';
+        ? 'ठीक है। आप क्या ऑर्डर करना चाहेंगे?'
+        : 'Okay. What would you like to order instead?';
     return { success: true, intent, items: [], unrecognizedItems: [], confidence: 0.98, response: msg, provider: 'gemini_ai_fallback' };
   }
 
@@ -214,22 +215,22 @@ const buildGroundedFallbackResponse = (text, language = 'en-IN', menuItems = [],
       responseText = language === 'kn-IN'
         ? `ಖಾರವಿಲ್ಲದ ಆಯ್ಕೆಗಳಿಗೆ: ${mildDishes.join(', ')} ಉತ್ತಮವಾಗಿದೆ.`
         : language === 'hi-IN'
-        ? `कम तीखे व्यंजनों के लिए: ${mildDishes.join(', ')} बेहतरीन विकल्प हैं।`
-        : `For mild dishes that aren't too spicy, I recommend: ${mildDishes.join(', ')}.`;
+          ? `कम तीखे व्यंजनों के लिए: ${mildDishes.join(', ')} बेहतरीन विकल्प हैं।`
+          : `For mild dishes that aren't too spicy, I recommend: ${mildDishes.join(', ')}.`;
     } else if (lower.includes('spicy') || lower.includes('ಖಾರ') || lower.includes('तीखा')) {
       const spicyDishes = menuItems.filter(m => m.isAvailable !== false && (m.dietaryTags?.includes('spicy') || m.name.includes('Manchurian') || m.name.includes('Kabab') || m.name.includes('Biryani'))).slice(0, 3).map(m => m.name);
       responseText = language === 'kn-IN'
         ? `ಖಾರವಾದ ತಿಂಡಿಗಳಿಗೆ: ${spicyDishes.join(', ')} ಪ್ರಯತ್ನಿಸಿ.`
         : language === 'hi-IN'
-        ? `तीखे खाने के शौकीनों के लिए: ${spicyDishes.join(', ')} बहुत लोकप्रिय हैं।`
-        : `For spicy favorites, I highly recommend: ${spicyDishes.join(', ')}.`;
+          ? `तीखे खाने के शौकीनों के लिए: ${spicyDishes.join(', ')} बहुत लोकप्रिय हैं।`
+          : `For spicy favorites, I highly recommend: ${spicyDishes.join(', ')}.`;
     } else {
       const specials = menuItems.filter(m => m.isSpecial && m.isAvailable !== false).slice(0, 3).map(m => m.name);
       responseText = language === 'kn-IN'
         ? `ನಮ್ಮ ಸ್ಪೆಷಲ್ ತಿಂಡಿಗಳು: ${specials.join(', ')}.`
         : language === 'hi-IN'
-        ? `हमारे लोकप्रिय शेफ स्पेशल: ${specials.join(', ')} हैं।`
-        : `Our chef's top recommendations today are: ${specials.join(', ')}.`;
+          ? `हमारे लोकप्रिय शेफ स्पेशल: ${specials.join(', ')} हैं।`
+          : `Our chef's top recommendations today are: ${specials.join(', ')}.`;
     }
     return { success: true, intent, items: [], unrecognizedItems: [], confidence: 0.95, response: responseText, provider: 'gemini_ai_fallback' };
   }
@@ -238,8 +239,8 @@ const buildGroundedFallbackResponse = (text, language = 'en-IN', menuItems = [],
     const msg = language === 'kn-IN'
       ? 'ನಮ್ಮ ಮೆನುವಿನಲ್ಲಿ Starters, Main Course, Biryani & Rice, Beverages ಮತ್ತು Desserts ಲಭ್ಯವಿದೆ.'
       : language === 'hi-IN'
-      ? 'हमारे मेनू में Starters, Main Course, Biryani & Rice, Beverages और Desserts शामिल हैं।'
-      : 'Our menu features Starters, Main Course Curries, Biryani & Rice, South Indian Beverages, and Desserts.';
+        ? 'हमारे मेनू में Starters, Main Course, Biryani & Rice, Beverages और Desserts शामिल हैं।'
+        : 'Our menu features Starters, Main Course Curries, Biryani & Rice, South Indian Beverages, and Desserts.';
     return { success: true, intent, items: [], unrecognizedItems: [], confidence: 0.95, response: msg, provider: 'gemini_ai_fallback' };
   }
 
@@ -369,8 +370,8 @@ const buildGroundedFallbackResponse = (text, language = 'en-IN', menuItems = [],
       responseText = language === 'kn-IN'
         ? `ನೀವು ${qtyWord} ${item.name} ಬಯಸಿದ್ದೀರಿ. ಅದನ್ನು ನಿಮ್ಮ ಆರ್ಡರ್‌ಗೆ ಸೇರಿಸಲೇ?`
         : language === 'hi-IN'
-        ? `आप ${qtyWord} ${item.name} चाहते हैं। क्या मैं इसे आपके ऑर्डर में जोड़ दूँ?`
-        : `You want ${qtyWord} ${item.name}. Shall I add it to your order?`;
+          ? `आप ${qtyWord} ${item.name} चाहते हैं। क्या मैं इसे आपके ऑर्डर में जोड़ दूँ?`
+          : `You want ${qtyWord} ${item.name}. Shall I add it to your order?`;
     } else {
       const summaryEn = matchedItems.map(i => `${getQuantityWord(i.quantity, 'en-IN')} ${i.name}`).join(' and ');
       const summaryKn = matchedItems.map(i => `${getQuantityWord(i.quantity, 'kn-IN')} ${i.name}`).join(' ಮತ್ತು ');
@@ -379,8 +380,8 @@ const buildGroundedFallbackResponse = (text, language = 'en-IN', menuItems = [],
       responseText = language === 'kn-IN'
         ? `ನೀವು ${summaryKn} ಬಯಸಿದ್ದೀರಿ. ಅವುಗಳನ್ನು ನಿಮ್ಮ ಆರ್ಡರ್‌ಗೆ ಸೇರಿಸಲೇ?`
         : language === 'hi-IN'
-        ? `आप ${summaryHi} चाहते हैं। क्या मैं इन्हें आपके ऑर्डर में जोड़ दूँ?`
-        : `You want ${summaryEn}. Shall I add them to your order?`;
+          ? `आप ${summaryHi} चाहते हैं। क्या मैं इन्हें आपके ऑर्डर में जोड़ दूँ?`
+          : `You want ${summaryEn}. Shall I add them to your order?`;
     }
 
     if (unrecognizedItems.length > 0) {
@@ -390,15 +391,15 @@ const buildGroundedFallbackResponse = (text, language = 'en-IN', menuItems = [],
     responseText = language === 'kn-IN'
       ? `ಕ್ಷಮಿಸಿ, "${unrecognizedItems.join(', ')}" ನಮ್ಮ ಮೆನುವಿನಲ್ಲಿ ಲಭ್ಯವಿಲ್ಲ.`
       : language === 'hi-IN'
-      ? `क्षमा करें, "${unrecognizedItems.join(', ')}" हमारे मेनू में उपलब्ध नहीं है।`
-      : "Sorry, I couldn't find that item on the menu.";
+        ? `क्षमा करें, "${unrecognizedItems.join(', ')}" हमारे मेनू में उपलब्ध नहीं है।`
+        : "Sorry, I couldn't find that item on the menu.";
   } else {
     intent = 'UNKNOWN';
     responseText = language === 'kn-IN'
       ? "ಸ್ಪಷ್ಟವಾಗಿ ಕೇಳಿಸಲಿಲ್ಲ. ನಿಮ್ಮ ತಿಂಡಿಯನ್ನು ಹೇಳಿ (ಉದಾ: 'ಒಂದು ಮಸಾಲ ದೋಸೆ') ಅಥವಾ ಮೆನು ನೋಡಿ."
       : language === 'hi-IN'
-      ? "मैं समझ नहीं पाया। कृपया अपना ऑर्डर बोलें (उदा: 'एक मसाला डोसा') या मेनू देखें।"
-      : "I didn't quite catch that. Please specify what you'd like to order (e.g. 'One Masala Dosa') or browse our menu.";
+        ? "मैं समझ नहीं पाया। कृपया अपना ऑर्डर बोलें (उदा: 'एक मसाला डोसा') या मेनू देखें।"
+        : "I didn't quite catch that. Please specify what you'd like to order (e.g. 'One Masala Dosa') or browse our menu.";
   }
 
   return {
@@ -429,14 +430,22 @@ router.post('/parse-intent', async (req, res) => {
     }
 
     let activeMenu = clientMenu;
-    if (!Array.isArray(activeMenu) || activeMenu.length === 0) {
-      activeMenu = await MenuItem.find({ isAvailable: true }).select('name price categorySlug type isSpecial dietaryTags ingredients description').lean();
+    let knowledgeDocs = [];
+
+    try {
+      if (mongoose.connection && mongoose.connection.readyState === 1) {
+        if (!Array.isArray(activeMenu) || activeMenu.length === 0) {
+          activeMenu = await MenuItem.find({ isAvailable: true }).select('name price categorySlug type isSpecial dietaryTags ingredients description').lean();
+        }
+        knowledgeDocs = await KnowledgeDoc.find({}).lean();
+      }
+    } catch (dbErr) {
+      console.warn('[voiceRoutes] MongoDB read error, continuing with fallback menu:', dbErr.message);
     }
 
-    const knowledgeDocs = await KnowledgeDoc.find({}).lean();
-
     const apiKey = process.env.GEMINI_API_KEY;
-    const isGeminiKeyConfigured = Boolean(apiKey && apiKey.trim() !== '' && !apiKey.includes('your_gemini'));
+    const isGeminiKeyConfigured = Boolean(
+      apiKey && apiKey.trim() !== '' && !apiKey.includes('your_gemini'));
 
     if (!isGeminiKeyConfigured) {
       const fallbackResult = buildGroundedFallbackResponse(text, language, activeMenu, knowledgeDocs);
@@ -504,7 +513,7 @@ Return strictly a valid JSON object matching this structure:
       const userContent = `Customer input (${language}): "${text}"`;
 
       const response = await ai.models.generateContent({
-        model: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+        model: process.env.GEMINI_MODEL || 'gemini-3.8-flash',
         contents: [
           { role: 'user', parts: [{ text: `${systemPrompt}\n\n${userContent}` }] }
         ],
