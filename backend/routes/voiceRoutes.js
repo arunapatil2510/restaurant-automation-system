@@ -182,124 +182,504 @@ const { GoogleGenAI } = require('@google/genai');
 
 /**
  * Helper to build intelligent local grounded parsing response
+ * Full conversational fallback with multi-turn context, pronoun resolution,
+ * price/ingredient queries, quantity changes, item removal, and ambiguity clarification.
  */
-const buildGroundedFallbackResponse = (text, language = 'en-IN', menuItems = [], knowledgeDocs = []) => {
-  const lower = text.toLowerCase().trim();
+const buildGroundedFallbackResponse = (
+  text,
+  language = 'en-IN',
+  menuItems = [],
+  knowledgeDocs = [],
+  conversationHistory = [],
+  currentOrder = [],
+  lastDiscussedDish = null
+) => {
+  const clean = (text || '').trim();
+  const lower = clean.toLowerCase();
 
-  // 1. Intent Detection
-  let intent = 'UNKNOWN';
-  if (/^(yes|confirm|correct|proceed|okay|ok|done|haudu|sari|haan|sahi|ಹೌದು|ಸರಿ|ಖಚಿತ|हाँ|सही|कन्फर्म)/i.test(lower)) {
-    intent = 'CONFIRM';
+  // Helper for quantity words
+  const getQuantityWord = (qty, lang) => {
+    const num = parseInt(qty, 10) || 1;
+    const englishWords = { 1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five', 6: 'six', 7: 'seven', 8: 'eight', 9: 'nine', 10: 'ten' };
+    const kannadaWords = { 1: 'ಒಂದು', 2: 'ಎರಡು', 3: 'ಮೂರು', 4: 'ನಾಲ್ಕು', 5: 'ಐದು', 6: 'ಆರು', 7: 'ಏಳು', 8: 'ಎಂಟು', 9: 'ಒಂಬತ್ತು', 10: 'ಹತ್ತು' };
+    const hindiWords = { 1: 'एक', 2: 'दो', 3: 'तीन', 4: 'चार', 5: 'पाँच', 6: 'छह', 7: 'सात', 8: 'आठ', 9: 'नौ', 10: 'दस' };
+    if (lang === 'kn-IN') return kannadaWords[num] || num.toString();
+    if (lang === 'hi-IN') return hindiWords[num] || num.toString();
+    return englishWords[num] || num.toString();
+  };
+
+  // Synonyms and dish aliases
+  const synonymMap = {
+    'masala dosa': 'Masala Dosa', 'masale dose': 'Masala Dosa', 'dosa': 'Masala Dosa', 'dosas': 'Masala Dosa', 'dose': 'Masala Dosa',
+    'ಮಸಾಲ ದೋಸೆ': 'Masala Dosa', 'ಮಸಾಲೆ ದೋಸೆ': 'Masala Dosa', 'ದೋಸೆ': 'Masala Dosa', 'मसाला डोसा': 'Masala Dosa', 'डोसा': 'Masala Dosa',
+    'samosa': 'Crispy Veg Samosa (2 Pcs)', 'veg samosa': 'Crispy Veg Samosa (2 Pcs)', 'crispy samosa': 'Crispy Veg Samosa (2 Pcs)', 'samose': 'Crispy Veg Samosa (2 Pcs)',
+    'ಸಮೋಸಾ': 'Crispy Veg Samosa (2 Pcs)', 'ಸಮೋಸ': 'Crispy Veg Samosa (2 Pcs)', 'समोसा': 'Crispy Veg Samosa (2 Pcs)', 'समोसे': 'Crispy Veg Samosa (2 Pcs)',
+    'gobi manchurian': 'Gobi Manchurian', 'gobi': 'Gobi Manchurian', 'ಗೋಬಿ': 'Gobi Manchurian', 'गोबी मंचूरियन': 'Gobi Manchurian', 'गोबी': 'Gobi Manchurian',
+    'chicken kabab': 'Chicken Kabab', 'kabab': 'Chicken Kabab', 'kebab': 'Chicken Kabab', 'ಕಬಾಬ್': 'Chicken Kabab', 'कबाब': 'Chicken Kabab',
+    'paneer butter masala': 'Paneer Butter Masala', 'paneer butter': 'Paneer Butter Masala', 'paneer masala': 'Paneer Butter Masala', 'ಪನೀರ್ ಬಟರ್': 'Paneer Butter Masala', 'पनीर बटर': 'Paneer Butter Masala',
+    'butter naan': 'Butter Naan', 'naan': 'Butter Naan', 'ನಾನ್': 'Butter Naan', 'नान': 'Butter Naan',
+    'dal tadka': 'Dal Tadka', 'dal': 'Dal Tadka', 'ದಾಲ್': 'Dal Tadka', 'दाल': 'Dal Tadka',
+    'north indian deluxe thali': 'North Indian Deluxe Thali', 'deluxe thali': 'North Indian Deluxe Thali', 'thali': 'North Indian Deluxe Thali', 'ಥಾಲಿ': 'North Indian Deluxe Thali', 'थाली': 'North Indian Deluxe Thali',
+    'south indian meals': 'South Indian Meals', 'meals': 'South Indian Meals', 'ಊಟ': 'South Indian Meals',
+    'veg fried rice': 'Veg Fried Rice', 'fried rice': 'Veg Fried Rice',
+    'veg dum biryani': 'Veg Dum Biryani', 'veg biryani': 'Veg Dum Biryani',
+    'chicken dum biryani': 'Chicken Dum Biryani', 'chicken biryani': 'Chicken Dum Biryani', 'biryani': 'Chicken Dum Biryani', 'ಬಿರಿಯಾನಿ': 'Chicken Dum Biryani', 'बिरयानी': 'Chicken Dum Biryani',
+    'jeera rice': 'Jeera Rice',
+    'south indian filter coffee': 'South Indian Filter Coffee', 'filter coffee': 'South Indian Filter Coffee', 'coffee': 'South Indian Filter Coffee', 'ಕಾಫಿ': 'South Indian Filter Coffee', 'कॉफी': 'South Indian Filter Coffee', 'कॉफ़ी': 'South Indian Filter Coffee',
+    'masala chai': 'Masala Chai', 'chai': 'Masala Chai', 'tea': 'Masala Chai', 'ಚಹಾ': 'Masala Chai', 'चाय': 'Masala Chai',
+    'fresh lime juice': 'Fresh Lime Juice', 'lime juice': 'Fresh Lime Juice', 'ನಿಂಬೆ ಜ್ಯೂಸ್': 'Fresh Lime Juice', 'नींबू पानी': 'Fresh Lime Juice',
+    'cold coffee with ice cream': 'Cold Coffee with Ice Cream', 'cold coffee': 'Cold Coffee with Ice Cream',
+    'gulab jamun (2 pcs)': 'Gulab Jamun (2 Pcs)', 'gulab jamun': 'Gulab Jamun (2 Pcs)', 'ಗುಲಾಬ್ ಜಾಮೂನ್': 'Gulab Jamun (2 Pcs)', 'गुलाब जामुन': 'Gulab Jamun (2 Pcs)',
+    "sizzling s'mores brownie": "Sizzling S'mores Brownie", 'brownie': "Sizzling S'mores Brownie",
+    'hot & sour veg soup': 'Hot & Sour Veg Soup', 'hot and sour soup': 'Hot & Sour Veg Soup', 'soup': 'Hot & Sour Veg Soup', 'ಸೂಪ್': 'Hot & Sour Veg Soup', 'सूप': 'Hot & Sour Veg Soup',
+    'peri peri french fries': 'Peri Peri French Fries', 'peri peri fries': 'Peri Peri French Fries', 'french fries': 'Peri Peri French Fries', 'fries': 'Peri Peri French Fries',
+    'mango lassi': 'Mango Lassi', 'lassi': 'Mango Lassi', 'ಮ್ಯಾಂಗೋ ಲಸ್ಸಿ': 'Mango Lassi', 'मैंगो लस्सी': 'Mango Lassi', 'लस्सी': 'Mango Lassi'
+  };
+
+  const numMap = {
+    'a': 1, 'an': 1, 'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5, 'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10,
+    'couple': 2, 'pair': 2,
+    'ಒಂದು': 1, 'ಎರಡು': 2, 'ಮೂರು': 3, 'ನಾಲ್ಕು': 4, 'ಐದು': 5, '೧': 1, '೨': 2, '೩': 3, '೪': 4, '೫': 5,
+    'एक': 1, 'दो': 2, 'तीन': 3, 'चार': 4, 'पाँच': 5, 'पांच': 5, '१': 1, '२': 2, '३': 3, '४': 4, '५': 5
+  };
+
+  // Helper to find a dish in text or resolve pronoun
+  const findReferencedDish = (queryText) => {
+    const qLower = queryText.toLowerCase();
+    for (const [alias, canonical] of Object.entries(synonymMap)) {
+      if (new RegExp('(^|\\b|\\s)' + alias + '(\\b|\\s|$)', 'i').test(qLower)) {
+        return menuItems.find(m => m.name.toLowerCase() === canonical.toLowerCase()) || { name: canonical };
+      }
+    }
+    // Check if pronoun references last discussed dish or single item in order
+    const isPronoun = /^(it|that|this|the dish|ಅದು|ಇದು|यह|इसे|वो)\b/i.test(qLower) || qLower.includes(' it ') || qLower.includes(' that ');
+    if (isPronoun) {
+      if (lastDiscussedDish) {
+        return menuItems.find(m => m.name.toLowerCase() === lastDiscussedDish.toLowerCase()) || { name: lastDiscussedDish };
+      }
+      if (currentOrder && currentOrder.length === 1) {
+        return menuItems.find(m => m.name.toLowerCase() === (currentOrder[0].name || '').toLowerCase()) || currentOrder[0];
+      }
+    }
+    return null;
+  };
+
+  // 1. GREETING
+  if (/^(hi|hello|hey|good morning|good afternoon|good evening|greetings)\b/i.test(lower) ||
+      /^(ಹಾಯ್|ಹಲೋ|ನಮಸ್ಕಾರ|ನಮಸ್ತೆ|ಶುಭೋದಯ|ಶುಭ ಸಂಜೆ)/i.test(lower) ||
+      /^(हाय|हेलो|नमस्ते|नमस्कार|सुप्रभात|प्रणाम)/i.test(lower)) {
     const msg = language === 'kn-IN'
-      ? 'ನಿಮ್ಮ ಆರ್ಡರ್‌ಗೆ ಸೇರಿಸಲಾಗಿದೆ. ಕಾರ್ಟ್‌ಗೆ ಕರೆದೊಯ್ಯಲಾಗುತ್ತಿದೆ.'
+      ? 'ನಮಸ್ಕಾರ! ರೆಸ್ಟೋಸ್ಮಾರ್ಟ್‌ಗೆ ಸುಸ್ವಾಗತ. ಇಂದು ನೀವು ಏನನ್ನು ಆರ್ಡರ್ ಮಾಡಲು ಬಯಸುತ್ತೀರಿ?'
       : language === 'hi-IN'
-        ? 'आपके ऑर्डर में जोड़ दिया गया है। कार्ट पर ले जा रहे हैं।'
-        : 'Added to your order. Taking you to the cart.';
-    return { success: true, intent, items: [], unrecognizedItems: [], confidence: 0.98, response: msg, provider: 'gemini_ai_fallback' };
-  }
-  if (/^(no|cancel|stop|reset|clear|beda|nahi|ಬೇಡ|ರದ್ದು|ತಪ್ಪು|नहीं|रद्द|गलत)/i.test(lower) || lower.includes('change it') || lower.includes('change') || lower.includes('modify') || lower.includes('ಬದಲಾಯಿಸಿ') || lower.includes('बदलो')) {
-    intent = (lower.includes('change') || lower.includes('modify') || lower.includes('ಬದಲಾಯಿಸಿ') || lower.includes('बदಲೋ')) ? 'MODIFY' : 'CANCEL';
-    const msg = language === 'kn-IN'
-      ? 'ಸರಿ. ನೀವು ಏನನ್ನು ಆರ್ಡರ್ ಮಾಡಲು ಬಯಸುತ್ತೀರಿ?'
-      : language === 'hi-IN'
-        ? 'ठीक है। आप क्या ऑर्डर करना चाहेंगे?'
-        : 'Okay. What would you like to order instead?';
-    return { success: true, intent, items: [], unrecognizedItems: [], confidence: 0.98, response: msg, provider: 'gemini_ai_fallback' };
+        ? 'नमस्ते! रेस्टोस्मार्ट में आपका स्वागत है। आज आप क्या खाना चाहेंगे?'
+        : 'Hello! Welcome to RESTOSMART. What would you like to order today?';
+    return {
+      success: true,
+      intent: 'GREETING',
+      action: 'NONE',
+      items: [],
+      updatedOrder: currentOrder,
+      requiresClarification: false,
+      clarificationQuestion: '',
+      unrecognizedItems: [],
+      lastDiscussedDish,
+      confidence: 0.98,
+      response: msg,
+      provider: 'gemini_ai_fallback'
+    };
   }
 
-  if (lower.includes('suggest') || lower.includes('recommend') || lower.includes('special') || lower.includes('best') || lower.includes('spicy') || lower.includes('mild') || lower.includes('ಸ್ಪೆಷಲ್') || lower.includes('ಖಾರ') || lower.includes('तीखा') || lower.includes('खास')) {
-    intent = 'RECOMMENDATION';
-    let responseText = '';
-    if (lower.includes('not too spicy') || lower.includes("isn't too spicy") || lower.includes('is not too spicy') || lower.includes('mild') || lower.includes('less spicy')) {
-      const mildDishes = menuItems.filter(m => m.isAvailable !== false && (m.dietaryTags?.includes('mild') || m.categorySlug === 'desserts' || m.categorySlug === 'beverages' || m.name.includes('Rice') || m.name.includes('Naan') || m.name.includes('Meals') || m.name.includes('Dosa'))).slice(0, 3).map(m => m.name);
-      responseText = language === 'kn-IN'
-        ? `ಖಾರವಿಲ್ಲದ ಆಯ್ಕೆಗಳಿಗೆ: ${mildDishes.join(', ')} ಉತ್ತಮವಾಗಿದೆ.`
+  // 2. HELP
+  if (/^(help|how do i order|how does this work|assist me|instructions)\b/i.test(lower) ||
+      /^(ಸಹಾಯ|ಹೇಗೆ ಆರ್ಡರ್ ಮಾಡಬೇಕು|ತಿಳಿಸಿ)/i.test(lower) ||
+      /^(मदद|कैसे ऑर्डर करें|बताओ)/i.test(lower)) {
+    const msg = language === 'kn-IN'
+      ? 'ನೀವು ನಿಮ್ಮ ತಿಂಡಿಗಳನ್ನು ನೇರವಾಗಿ ಹೇಳಿ ಆರ್ಡರ್ ಮಾಡಬಹುದು (ಉದಾ: "ಎರಡು ಮಸಾಲ ದೋಸೆ ಮತ್ತು ಒಂದು ಕಾಫಿ"), ಅಥವಾ ಬೆಲೆ ಮತ್ತು ಶಿಫಾರಸುಗಳ ಬಗ್ಗೆ ಕೇಳಬಹುದು.'
+      : language === 'hi-IN'
+        ? 'आप बोलकर सीधे ऑर्डर कर सकते हैं (जैसे: "दो मसाला डोसा और एक कॉफ़ी"), या व्यंजनों की कीमत और सलाह पूछ सकते हैं।'
+        : "You can order naturally by speaking (e.g., 'Two Masala Dosas and one Filter Coffee'), ask about prices, or request recommendations.";
+    return {
+      success: true,
+      intent: 'HELP',
+      action: 'NONE',
+      items: [],
+      updatedOrder: currentOrder,
+      requiresClarification: false,
+      clarificationQuestion: '',
+      unrecognizedItems: [],
+      lastDiscussedDish,
+      confidence: 0.98,
+      response: msg,
+      provider: 'gemini_ai_fallback'
+    };
+  }
+
+  // 3. MENU QUERY (What is available / Categories / Options)
+  if (lower.includes('what do you have') || lower.includes('show menu') || lower.includes('what is available') ||
+      lower.includes('menu options') || lower.includes('categories') || lower.includes('what drinks') ||
+      lower.includes('what starters') || lower.includes('what desserts') ||
+      lower.includes('ಮೆನು') || lower.includes('ಏನಿದೆ') || lower.includes('ಏನು ಸಿಗುತ್ತೆ') ||
+      lower.includes('मेनू') || lower.includes('क्या मिलेगा') || lower.includes('क्या उपलब्ध है')) {
+    let msg = '';
+    if (lower.includes('drink') || lower.includes('beverage') || lower.includes('ಕುಡಿಯಲು') || lower.includes('पेय')) {
+      const drinks = menuItems.filter(m => m.categorySlug === 'beverages' && m.isAvailable !== false).map(m => m.name);
+      msg = language === 'kn-IN'
+        ? `ನಮ್ಮಲ್ಲಿ ಲಭ್ಯವಿರುವ ಪಾನೀಯಗಳು: ${drinks.join(', ')}.`
         : language === 'hi-IN'
-          ? `कम तीखे व्यंजनों के लिए: ${mildDishes.join(', ')} बेहतरीन विकल्प हैं।`
+          ? `हमारे पेय पदार्थों में शामिल हैं: ${drinks.join(', ')}।`
+          : `Our available beverages include: ${drinks.join(', ')}.`;
+    } else if (lower.includes('starter') || lower.includes('ತಿಂಡಿ') || lower.includes('स्टार्टर')) {
+      const starters = menuItems.filter(m => m.categorySlug === 'starters' && m.isAvailable !== false).map(m => m.name);
+      msg = language === 'kn-IN'
+        ? `ನಮ್ಮ ಸ್ಟಾರ್ಟರ್ಸ್‌ಗಳು: ${starters.join(', ')}.`
+        : language === 'hi-IN'
+          ? `हमारे स्टार्टर्स में शामिल हैं: ${starters.join(', ')}।`
+          : `Our starters include: ${starters.join(', ')}.`;
+    } else if (lower.includes('dessert') || lower.includes('sweet') || lower.includes('ಸಿಹಿ') || lower.includes('मीठा')) {
+      const desserts = menuItems.filter(m => m.categorySlug === 'desserts' && m.isAvailable !== false).map(m => m.name);
+      msg = language === 'kn-IN'
+        ? `ನಮ್ಮ ಸಿಹಿ ತಿನಿಸುಗಳು: ${desserts.join(', ')}.`
+        : language === 'hi-IN'
+          ? `हमारे मीठे व्यंजनों में शामिल हैं: ${desserts.join(', ')}।`
+          : `Our desserts include: ${desserts.join(', ')}.`;
+    } else {
+      msg = language === 'kn-IN'
+        ? 'ನಮ್ಮ ಮೆನುವಿನಲ್ಲಿ Starters, Main Course, Biryani & Rice, South Indian Beverages ಮತ್ತು Desserts ಲಭ್ಯವಿದೆ. ನಿಮಗೆ ಯಾವುದು ಬೇಕು?'
+        : language === 'hi-IN'
+          ? 'हमारे मेनू में Starters, Main Course, Biryani & Rice, South Indian Beverages और Desserts उपलब्ध हैं। आप क्या पसंद करेंगे?'
+          : 'Our menu features Starters, Main Course Curries, Biryani & Rice, South Indian Beverages, and Desserts. What would you like?';
+    }
+    return {
+      success: true,
+      intent: 'MENU_QUERY',
+      action: 'NONE',
+      items: [],
+      updatedOrder: currentOrder,
+      requiresClarification: false,
+      clarificationQuestion: '',
+      unrecognizedItems: [],
+      lastDiscussedDish,
+      confidence: 0.95,
+      response: msg,
+      provider: 'gemini_ai_fallback'
+    };
+  }
+
+  // 4. PRICE QUERY ("How much is...", "Price of...", "Cost of...")
+  if (lower.includes('how much') || lower.includes('price of') || lower.includes('cost of') || lower.includes('rate of') ||
+      lower.includes('ಬೆಲೆ ಎಷ್ಟು') || lower.includes('ದರ ಎಷ್ಟು') || lower.includes('ರೇಟ್ ಎಷ್ಟು') ||
+      lower.includes('कीमत क्या') || lower.includes('कितने का है') || lower.includes('रेट क्या')) {
+    const dish = findReferencedDish(lower);
+    if (dish && dish.price) {
+      const msg = language === 'kn-IN'
+        ? `${dish.name} ಬೆಲೆ ₹${dish.price}. ನೀವು ಇದನ್ನು ಆರ್ಡರ್ ಮಾಡಲು ಬಯಸುವಿರಾ?`
+        : language === 'hi-IN'
+          ? `${dish.name} की कीमत ₹${dish.price} है। क्या आप इसे ऑर्डर करना चाहेंगे?`
+          : `${dish.name} is ₹${dish.price}. Would you like to order it?`;
+      return {
+        success: true,
+        intent: 'PRICE_QUERY',
+        action: 'NONE',
+        items: [],
+        updatedOrder: currentOrder,
+        targetItem: dish.name,
+        requiresClarification: false,
+        clarificationQuestion: '',
+        unrecognizedItems: [],
+        lastDiscussedDish: dish.name,
+        confidence: 0.96,
+        response: msg,
+        provider: 'gemini_ai_fallback'
+      };
+    }
+  }
+
+  // 5. INGREDIENT & ALLERGEN & SPICE QUERY ("Is it spicy?", "Does it have nuts?", "Ingredients in...")
+  if (lower.includes('ingredient') || lower.includes('is it spicy') || lower.includes('is it mild') ||
+      lower.includes('does it have') || lower.includes('contain') || lower.includes('made of') ||
+      lower.includes('is it veg') || lower.includes('is it jain') ||
+      lower.includes('ಖಾರವೇ') || lower.includes('ಸಾಮಗ್ರಿಗಳು') || lower.includes('ಅಡಕಗಳು') ||
+      lower.includes('तीखा है क्या') || lower.includes('क्या इसमें') || lower.includes('सामग्री')) {
+    const dish = findReferencedDish(lower);
+    if (dish) {
+      const matchedModel = menuItems.find(m => m.name.toLowerCase() === dish.name.toLowerCase()) || dish;
+      let reply = '';
+      if (lower.includes('spicy') || lower.includes('ಖಾರ') || lower.includes('तीखा')) {
+        const isSpicy = matchedModel.dietaryTags?.includes('spicy');
+        reply = language === 'kn-IN'
+          ? (isSpicy ? `${dish.name} ಸ್ವಲ್ಪ ಖಾರವಾಗಿರುತ್ತದೆ.` : `${dish.name} ಮಧ್ಯಮ ಖಾರ ಅಥವಾ ಸೌಮ್ಯ ರುಚಿಯನ್ನು ಹೊಂದಿದೆ.`)
+          : language === 'hi-IN'
+            ? (isSpicy ? `${dish.name} मसालेदार और तीखा है।` : `${dish.name} कम तीखा और सौम्य है।`)
+            : (isSpicy ? `${dish.name} has a spicy kick.` : `${dish.name} is mildly spiced and not too hot.`);
+      } else if (lower.includes('veg') || lower.includes('nonveg') || lower.includes('ಶಾಕಾಹಾರಿ') || lower.includes('शाकाहारी')) {
+        const isVeg = matchedModel.type === 'veg';
+        reply = language === 'kn-IN'
+          ? `${dish.name} ${isVeg ? 'ಸಂಪೂರ್ಣ ಶಾಕಾಹಾರಿ (Pure Veg)' : 'ಮಾಂಸಾಹಾರಿ (Non-Veg)'} ಆಗಿದೆ.`
+          : language === 'hi-IN'
+            ? `${dish.name} ${isVeg ? 'शुद्ध शाकाहारी (Pure Veg)' : 'मांसाहारी (Non-Veg)'} है।`
+            : `${dish.name} is ${isVeg ? '100% vegetarian' : 'non-vegetarian'}.`;
+      } else {
+        const ingredients = matchedModel.ingredients && matchedModel.ingredients.length > 0
+          ? matchedModel.ingredients.join(', ')
+          : 'fresh kitchen spices and traditional recipe ingredients';
+        reply = language === 'kn-IN'
+          ? `${dish.name} ನಲ್ಲಿ ಬಳಸಲಾದ ಮುಖ್ಯ ಸಾಮಗ್ರಿಗಳು: ${ingredients}.`
+          : language === 'hi-IN'
+            ? `${dish.name} की मुख्य सामग्री: ${ingredients} है।`
+            : `${dish.name} is prepared with: ${ingredients}.`;
+      }
+      return {
+        success: true,
+        intent: 'INGREDIENT_QUERY',
+        action: 'NONE',
+        items: [],
+        updatedOrder: currentOrder,
+        targetItem: dish.name,
+        requiresClarification: false,
+        clarificationQuestion: '',
+        unrecognizedItems: [],
+        lastDiscussedDish: dish.name,
+        confidence: 0.95,
+        response: reply,
+        provider: 'gemini_ai_fallback'
+      };
+    }
+  }
+
+  // 6. RECOMMENDATIONS
+  if (lower.includes('recommend') || lower.includes('suggest') || lower.includes('special') ||
+      lower.includes('bestseller') || lower.includes('popular') || lower.includes('what should i') ||
+      lower.includes('ಶಿಫಾರಸು') || lower.includes('ಸ್ಪೆಷಲ್') || lower.includes('सलाह') || lower.includes('स्पेशल')) {
+    let responseText = '';
+    if (lower.includes('mild') || lower.includes('not too spicy') || lower.includes('less spicy') || lower.includes('sweet') || lower.includes('ಸಿಹಿ')) {
+      const mildDishes = menuItems.filter(m => m.isAvailable !== false && (m.dietaryTags?.includes('mild') || m.categorySlug === 'desserts' || m.name.includes('Dosa'))).slice(0, 3).map(m => m.name);
+      responseText = language === 'kn-IN'
+        ? `ಖಾರವಿಲ್ಲದ ಸೌಮ್ಯ ಆಯ್ಕೆಗಳಿಗೆ: ${mildDishes.join(', ')} ಅತ್ಯುತ್ತಮ.`
+        : language === 'hi-IN'
+          ? `कम तीखे और हल्के व्यंजनों के लिए: ${mildDishes.join(', ')} बढ़िया विकल्प हैं।`
           : `For mild dishes that aren't too spicy, I recommend: ${mildDishes.join(', ')}.`;
     } else if (lower.includes('spicy') || lower.includes('ಖಾರ') || lower.includes('तीखा')) {
       const spicyDishes = menuItems.filter(m => m.isAvailable !== false && (m.dietaryTags?.includes('spicy') || m.name.includes('Manchurian') || m.name.includes('Kabab') || m.name.includes('Biryani'))).slice(0, 3).map(m => m.name);
       responseText = language === 'kn-IN'
-        ? `ಖಾರವಾದ ತಿಂಡಿಗಳಿಗೆ: ${spicyDishes.join(', ')} ಪ್ರಯತ್ನಿಸಿ.`
+        ? `ಖಾರವಾದ ರುಚಿಗೆ: ${spicyDishes.join(', ')} ಪ್ರಯತ್ನಿಸಿ.`
         : language === 'hi-IN'
-          ? `तीखे खाने के शौकीनों के लिए: ${spicyDishes.join(', ')} बहुत लोकप्रिय हैं।`
+          ? `तीखे खाने के शौकीनों के लिए: ${spicyDishes.join(', ')} बेहद लोकप्रिय हैं।`
           : `For spicy favorites, I highly recommend: ${spicyDishes.join(', ')}.`;
     } else {
       const specials = menuItems.filter(m => m.isSpecial && m.isAvailable !== false).slice(0, 3).map(m => m.name);
       responseText = language === 'kn-IN'
-        ? `ನಮ್ಮ ಸ್ಪೆಷಲ್ ತಿಂಡಿಗಳು: ${specials.join(', ')}.`
+        ? `ನಮ್ಮ ಇಂದಿನ ಮುಖ್ಯ ಶೆಫ್ ಸ್ಪೆಷಲ್ಸ್: ${specials.join(', ')}.`
         : language === 'hi-IN'
-          ? `हमारे लोकप्रिय शेफ स्पेशल: ${specials.join(', ')} हैं।`
-          : `Our chef's top recommendations today are: ${specials.join(', ')}.`;
+          ? `हमारे शेफ के आज के खास स्पेशल: ${specials.join(', ')} हैं।`
+          : `Our chef's top recommendations today are: ${specials.join(', ')}. Would you like to try any?`;
     }
-    return { success: true, intent, items: [], unrecognizedItems: [], confidence: 0.95, response: responseText, provider: 'gemini_ai_fallback' };
+    return {
+      success: true,
+      intent: 'RECOMMENDATION',
+      action: 'NONE',
+      items: [],
+      updatedOrder: currentOrder,
+      requiresClarification: false,
+      clarificationQuestion: '',
+      unrecognizedItems: [],
+      lastDiscussedDish,
+      confidence: 0.95,
+      response: responseText,
+      provider: 'gemini_ai_fallback'
+    };
   }
-  if (lower.includes('menu') || lower.includes('what do you have') || lower.includes('options') || lower.includes('categories') || lower.includes('ಮೆನು') || lower.includes('मेनू')) {
-    intent = 'MENU_QUERY';
+
+  // 7. CONFIRM ("Yes", "Confirm", "Proceed", "Place order")
+  if (/^(yes|confirm|correct|proceed|okay|ok|done|place order|add it|add them|yes please|sure|yep|yeah)\b/i.test(lower) ||
+      /^(ಹೌದು|ಸರಿ|ಖಚಿತ|ಆರ್ಡರ್ ಮಾಡಿ|ಖಚಿತಪಡಿಸಿ|ಆಯಿತು|ಹಾ)/i.test(lower) ||
+      /^(हाँ|हाँजी|हाँ जी|कन्फर्म|सही है|ऑर्डर करो|ठीक है|हाँ ठीक है|हां)/i.test(lower)) {
     const msg = language === 'kn-IN'
-      ? 'ನಮ್ಮ ಮೆನುವಿನಲ್ಲಿ Starters, Main Course, Biryani & Rice, Beverages ಮತ್ತು Desserts ಲಭ್ಯವಿದೆ.'
+      ? 'ನಿಮ್ಮ ಆರ್ಡರ್ ದೃಢೀಕರಿಸಲಾಗಿದೆ. ಕಾರ್ಟ್‌ಗೆ ಕರೆದೊಯ್ಯಲಾಗುತ್ತಿದೆ.'
       : language === 'hi-IN'
-        ? 'हमारे मेनू में Starters, Main Course, Biryani & Rice, Beverages और Desserts शामिल हैं।'
-        : 'Our menu features Starters, Main Course Curries, Biryani & Rice, South Indian Beverages, and Desserts.';
-    return { success: true, intent, items: [], unrecognizedItems: [], confidence: 0.95, response: msg, provider: 'gemini_ai_fallback' };
+        ? 'आपका ऑर्डर कन्फर्म हो गया है। कार्ट पर ले जा रहे हैं।'
+        : 'Your order is confirmed. Taking you to the cart.';
+    return {
+      success: true,
+      intent: 'CONFIRM',
+      action: 'NONE',
+      items: currentOrder,
+      updatedOrder: currentOrder,
+      requiresClarification: false,
+      clarificationQuestion: '',
+      unrecognizedItems: [],
+      lastDiscussedDish,
+      confidence: 0.98,
+      response: msg,
+      provider: 'gemini_ai_fallback'
+    };
   }
 
-  // 2. Food Order Parsing
-  intent = 'ORDER';
-  const matchedItems = [];
-  const unrecognizedItems = [];
+  // 8. CANCEL / CLEAR ("No", "Cancel", "Clear", "Reset", "Never mind", "Discard")
+  if (/^(no|cancel|stop|reset|clear|discard|never mind|cancel order|dont order|beda|nahi)\b/i.test(lower) ||
+      /^(ಬೇಡ|ರದ್ದು|ತಪ್ಪು|ಬೇಡವೇ ಬೇಡ|ಕ್ಯಾನ್ಸಲ್)/i.test(lower) ||
+      /^(नहीं|रद्द|गलत|वापस|कैंसिल|मत करो|कैंसिल करो)/i.test(lower)) {
+    const msg = language === 'kn-IN'
+      ? 'ಸರಿ, ಆರ್ಡರ್ ರದ್ದುಗೊಳಿಸಲಾಗಿದೆ. ಬದಲಿಗೆ ನೀವು ಏನನ್ನು ಆರ್ಡರ್ ಮಾಡಲು ಬಯಸುತ್ತೀರಿ?'
+      : language === 'hi-IN'
+        ? 'ठीक है, ऑर्डर रद्द कर दिया गया है। आप इसके बदले क्या लेना चाहेंगे?'
+        : 'Okay, order cancelled. What would you like to order instead?';
+    return {
+      success: true,
+      intent: 'CANCEL',
+      action: 'CLEAR',
+      items: [],
+      updatedOrder: [],
+      requiresClarification: false,
+      clarificationQuestion: '',
+      unrecognizedItems: [],
+      lastDiscussedDish: null,
+      confidence: 0.98,
+      response: msg,
+      provider: 'gemini_ai_fallback'
+    };
+  }
 
-  // Multilingual numbers map
-  const numMap = {
-    'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5, 'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10, 'a': 1, 'an': 1,
-    'ಒಂದು': 1, 'ಎರಡು': 2, 'ಮೂರು': 3, 'ನಾಲ್ಕು': 4, 'ಐದು': 5, '೧': 1, '೨': 2, '೩': 3, '೪': 4, '೫': 5,
-    'एक': 1, 'दो': 2, 'तीन': 3, 'चार': 4, 'पाँच': 5, 'पांच': 5, '१': 1, '२': 2, '೩': 3, '४': 4, '५': 5
-  };
+  // 9. REMOVE ITEM ("Remove the coffee", "Drop the soup", "Don't want lassi", "ಹಟಾವೋ", "ತೆಗೆದುಹಾಕಿ")
+  if (lower.includes('remove') || lower.includes('drop') || lower.includes('delete') ||
+      lower.includes("don't want") || lower.includes('dont want') || lower.includes('take off') ||
+      lower.includes('ತೆಗೆದುಹಾಕಿ') || lower.includes('ಬೇಡ') || lower.includes('ಹಟಾವೋ') || lower.includes('हटाओ') || lower.includes('निकाल दो')) {
+    const dishToRemove = findReferencedDish(lower);
+    if (dishToRemove && currentOrder && currentOrder.length > 0) {
+      const updated = currentOrder.filter(item => {
+        const iName = (item.name || item.dish?.name || '').toLowerCase();
+        return !iName.includes(dishToRemove.name.toLowerCase());
+      });
+      const msg = language === 'kn-IN'
+        ? `ಸರಿ, ನಿಮ್ಮ ಆರ್ಡರ್‌ನಿಂದ ${dishToRemove.name} ತೆಗೆದುಹಾಕಲಾಗಿದೆ.`
+        : language === 'hi-IN'
+          ? `ज़रूर, मैंने आपके ऑर्डर से ${dishToRemove.name} हटा दिया है।`
+          : `Sure, I've removed ${dishToRemove.name} from your order.`;
+      return {
+        success: true,
+        intent: 'REMOVE_ITEM',
+        action: 'REMOVE',
+        items: [],
+        updatedOrder: updated,
+        targetItem: dishToRemove.name,
+        requiresClarification: false,
+        clarificationQuestion: '',
+        unrecognizedItems: [],
+        lastDiscussedDish: dishToRemove.name,
+        confidence: 0.96,
+        response: msg,
+        provider: 'gemini_ai_fallback'
+      };
+    }
+  }
 
-  // Synonyms mapping
-  const synonymMap = {
-    'masala dosa': 'Masala Dosa', 'masale dose': 'Masala Dosa', 'dosa': 'Masala Dosa', 'dose': 'Masala Dosa', 'ಮಸಾಲ ದೋಸೆ': 'Masala Dosa', 'ಮಸಾಲೆ ದೋಸೆ': 'Masala Dosa', 'मसाला डोसा': 'Masala Dosa', 'डोसा': 'Masala Dosa',
-    'samosa': 'Crispy Veg Samosa (2 Pcs)', 'veg samosa': 'Crispy Veg Samosa (2 Pcs)', 'crispy samosa': 'Crispy Veg Samosa (2 Pcs)', 'samose': 'Crispy Veg Samosa (2 Pcs)', 'ಸಮೋಸಾ': 'Crispy Veg Samosa (2 Pcs)', 'ಸಮೋಸ': 'Crispy Veg Samosa (2 Pcs)', 'समोसा': 'Crispy Veg Samosa (2 Pcs)',
-    'gobi manchurian': 'Gobi Manchurian', 'gobi': 'Gobi Manchurian', 'ಗೋಬಿ': 'Gobi Manchurian', 'गोबी मंचूरियन': 'Gobi Manchurian',
-    'chicken kabab': 'Chicken Kabab', 'kabab': 'Chicken Kabab', 'kebab': 'Chicken Kabab', 'ಕಬಾಬ್': 'Chicken Kabab', 'कबाब': 'Chicken Kabab',
-    'paneer butter masala': 'Paneer Butter Masala', 'paneer butter': 'Paneer Butter Masala', 'ಪನೀರ್ ಬಟರ್': 'Paneer Butter Masala', 'पनीर बटर': 'Paneer Butter Masala',
-    'butter naan': 'Butter Naan', 'naan': 'Butter Naan', 'ನಾನ್': 'Butter Naan', 'नान': 'Butter Naan',
-    'dal tadka': 'Dal Tadka', 'dal': 'Dal Tadka', 'ದಾಲ್': 'Dal Tadka', 'ದಾಲ': 'Dal Tadka', 'दाल': 'Dal Tadka',
-    'veg biryani': 'Veg Dum Biryani', 'chicken biryani': 'Chicken Dum Biryani', 'dum biryani': 'Chicken Dum Biryani', 'biryani': 'Chicken Dum Biryani', 'ಬಿರಿಯಾನಿ': 'Chicken Dum Biryani', 'बिरयानी': 'Chicken Dum Biryani',
-    'jeera rice': 'Jeera Rice', 'fried rice': 'Veg Fried Rice', 'filter coffee': 'South Indian Filter Coffee', 'coffee': 'South Indian Filter Coffee', 'ಕಾಫಿ': 'South Indian Filter Coffee', 'कॉफी': 'South Indian Filter Coffee', 'कॉफ़ी': 'South Indian Filter Coffee',
-    'cold coffee': 'Cold Coffee with Ice Cream', 'masala chai': 'Masala Chai', 'chai': 'Masala Chai', 'tea': 'Masala Chai', 'ಚಹಾ': 'Masala Chai', 'चाय': 'Masala Chai', 'lime juice': 'Fresh Lime Juice', 'gulab jamun': 'Gulab Jamun (2 Pcs)', 'brownie': "Sizzling S'mores Brownie",
-    'mango lassi': 'Mango Lassi', 'lassi': 'Mango Lassi', 'ಮ್ಯಾಂಗೋ ಲಸ್ಸಿ': 'Mango Lassi', 'ಮಾವಿನ ಹಣ್ಣಿನ ಲಸ್ಸಿ': 'Mango Lassi', 'ಲಸ್ಸಿ': 'Mango Lassi', 'मैंगो लस्सी': 'Mango Lassi', 'आम की लस्सी': 'Mango Lassi', 'लस्सी': 'Mango Lassi'
-  };
+  // 10. QUANTITY MODIFICATION & AMBIGUITY CLARIFICATION ("Make that three", "Change dosa to 2")
+  if (lower.includes('make that') || lower.includes('make it') || lower.includes('change') ||
+      lower.includes('instead of') || lower.includes('quantity to') || lower.includes('ಬದಲಾಯಿಸಿ') || lower.includes('बदलो')) {
+    // Extract new quantity number
+    let newQty = 1;
+    for (const [w, v] of Object.entries(numMap)) {
+      if (new RegExp('\\b' + w + '\\b', 'i').test(lower)) {
+        newQty = v;
+        break;
+      }
+    }
+    const digitMatch = lower.match(/\b(\d+)\b/);
+    if (digitMatch) newQty = parseInt(digitMatch[1], 10) || newQty;
 
-  // Check for unknown dish requests
+    // Check which item is targeted
+    const explicitDish = findReferencedDish(lower);
+
+    // If ambiguous: multiple items in currentOrder and customer says "make that three" without naming dish
+    if (!explicitDish && currentOrder && currentOrder.length > 1) {
+      const itemNames = currentOrder.map(i => i.name || i.dish?.name);
+      const question = language === 'kn-IN'
+        ? `ನೀವು 3 ${itemNames.join(' ಅಥವಾ 3 ')} ಎಂದು ಹೇಳುತ್ತಿದ್ದೀರಾ?`
+        : language === 'hi-IN'
+          ? `क्या आपका मतलब 3 ${itemNames.join(' या 3 ')} से है?`
+          : `Do you mean three ${itemNames.join(' or three ')}?`;
+      return {
+        success: true,
+        intent: 'ASK_CLARIFICATION',
+        action: 'NONE',
+        items: [],
+        updatedOrder: currentOrder,
+        requiresClarification: true,
+        clarificationQuestion: question,
+        unrecognizedItems: [],
+        lastDiscussedDish,
+        confidence: 0.95,
+        response: question,
+        provider: 'gemini_ai_fallback'
+      };
+    }
+
+    // Unambiguous: either target dish is explicitly named or only 1 item in order or resolved by lastDiscussedDish
+    const targetItemName = explicitDish ? explicitDish.name : (lastDiscussedDish || (currentOrder[0] && (currentOrder[0].name || currentOrder[0].dish?.name)));
+    if (targetItemName && currentOrder && currentOrder.length > 0) {
+      const updated = currentOrder.map(i => {
+        const iName = (i.name || i.dish?.name || '').toLowerCase();
+        if (iName.includes(targetItemName.toLowerCase())) {
+          const price = i.price || (i.dish && i.dish.price) || 0;
+          return { ...i, quantity: newQty, subtotal: price * newQty };
+        }
+        return i;
+      });
+      const qtyWord = getQuantityWord(newQty, language);
+      const msg = language === 'kn-IN'
+        ? `ಸರಿ! ${targetItemName} ಪ್ರಮಾಣವನ್ನು ${qtyWord} ಕ್ಕೆ ಬದಲಾಯಿಸಲಾಗಿದೆ.`
+        : language === 'hi-IN'
+          ? `ठीक है! ${targetItemName} की संख्या बदलकर ${qtyWord} कर दी गई है।`
+          : `Got it! Updated ${targetItemName} to ${qtyWord}. Would you like anything else?`;
+      return {
+        success: true,
+        intent: 'MODIFY_QUANTITY',
+        action: 'UPDATE_QUANTITY',
+        items: updated,
+        updatedOrder: updated,
+        targetItem: targetItemName,
+        requiresClarification: false,
+        clarificationQuestion: '',
+        unrecognizedItems: [],
+        lastDiscussedDish: targetItemName,
+        confidence: 0.96,
+        response: msg,
+        provider: 'gemini_ai_fallback'
+      };
+    }
+  }
+
+  // 11. CHECK FOR OFF-MENU REQUESTS (Pizza, Burger, Pasta, etc.)
   const commonUnknownDishes = [
-    { key: 'paneer tikka', name: 'Paneer Tikka' },
-    { key: 'tikka', name: 'Tikka' },
-    { key: 'pizza', name: 'Pizza' },
-    { key: 'burger', name: 'Burger' },
-    { key: 'pasta', name: 'Pasta' },
-    { key: 'noodles', name: 'Noodles' }
+    { key: 'paneer tikka', name: 'Paneer Tikka', alt: 'Paneer Butter Masala' },
+    { key: 'tikka', name: 'Tikka', alt: 'Chicken Kabab' },
+    { key: 'pizza', name: 'Pizza', alt: 'Crispy Veg Samosa' },
+    { key: 'burger', name: 'Burger', alt: 'Crispy Veg Samosa or Peri Peri French Fries' },
+    { key: 'pasta', name: 'Pasta', alt: 'Veg Fried Rice' },
+    { key: 'noodles', name: 'Noodles', alt: 'Veg Fried Rice' },
+    { key: 'ice cream', name: 'Ice Cream', alt: 'Cold Coffee with Ice Cream' }
   ];
 
+  const unrecognizedItems = [];
+  let suggestedAlternative = '';
   for (const unk of commonUnknownDishes) {
     if (lower.includes(unk.key) && !menuItems.some(m => m.name.toLowerCase().includes(unk.key))) {
       unrecognizedItems.push(unk.name);
+      if (!suggestedAlternative) suggestedAlternative = unk.alt;
     }
   }
 
-  // Extract matched menu items
+  // 12. FOOD ORDER PARSING (Single or multiple items, additions, grounding)
+  const matchedItems = [];
   menuItems.forEach((menuItem) => {
     const dishNameLower = menuItem.name.toLowerCase();
     let found = false;
     let qty = 1;
 
-    // Check direct dish name
     if (lower.includes(dishNameLower)) {
       found = true;
     } else {
-      // Check synonyms
       for (const [syn, canonical] of Object.entries(synonymMap)) {
-        if (canonical.toLowerCase() === dishNameLower && new RegExp('(^|\\s)' + syn + '($|\\s)', 'i').test(lower)) {
+        if (canonical.toLowerCase() === dishNameLower && new RegExp('(^|\\s|\\b)' + syn + '(\\b|\\s|$)', 'i').test(lower)) {
           found = true;
           break;
         }
@@ -307,16 +687,15 @@ const buildGroundedFallbackResponse = (text, language = 'en-IN', menuItems = [],
     }
 
     if (found) {
-      // Find quantity in text near dish name
+      // Find quantity associated with this dish
       for (const [word, val] of Object.entries(numMap)) {
         const regex1 = new RegExp('\\b' + word + '\\s+([a-zA-Z\\u0C80-\\u0CFF\\u0900-\\u097F\\s]*)' + dishNameLower.slice(0, 4), 'i');
         const regex2 = new RegExp(dishNameLower.slice(0, 4) + '([a-zA-Z\\u0C80-\\u0CFF\\u0900-\\u097F\\s]*)\\b' + word + '\\b', 'i');
-        const digitRegex = new RegExp('(\\d+)\\s+([a-zA-Z\\u0C80-\\u0CFF\\u0900-\\u097F\\s]*)' + dishNameLower.slice(0, 4), 'i');
-
         if (regex1.test(lower) || regex2.test(lower)) {
           qty = val;
           break;
         }
+        const digitRegex = new RegExp('(\\d+)\\s+([a-zA-Z\\u0C80-\\u0CFF\\u0900-\\u097F\\s]*)' + dishNameLower.slice(0, 4), 'i');
         const digitMatch = lower.match(digitRegex);
         if (digitMatch && digitMatch[1]) {
           qty = parseInt(digitMatch[1], 10) || 1;
@@ -331,6 +710,7 @@ const buildGroundedFallbackResponse = (text, language = 'en-IN', menuItems = [],
       if (lower.includes('extra spicy') || lower.includes('very spicy')) cust.push('Extra Spicy');
       if (lower.includes('less spicy') || lower.includes('mild')) cust.push('Less Spicy');
       if (lower.includes('jain')) cust.push('Jain Preparation');
+      if (lower.includes('less ice') || lower.includes('no ice')) cust.push('Less Ice');
 
       matchedItems.push({
         name: menuItem.name,
@@ -342,85 +722,131 @@ const buildGroundedFallbackResponse = (text, language = 'en-IN', menuItems = [],
     }
   });
 
-  const getQuantityWord = (qty, lang) => {
-    const num = parseInt(qty, 10) || 1;
-    const englishWords = {
-      1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five',
-      6: 'six', 7: 'seven', 8: 'eight', 9: 'nine', 10: 'ten'
-    };
-    const kannadaWords = {
-      1: 'ಒಂದು', 2: 'ಎರಡು', 3: 'ಮೂರು', 4: 'ನಾಲ್ಕು', 5: 'ಐದು',
-      6: 'ಆರು', 7: 'ಏಳು', 8: 'ಎಂಟು', 9: 'ಒಂಬತ್ತು', 10: 'ಹತ್ತು'
-    };
-    const hindiWords = {
-      1: 'एक', 2: 'दो', 3: 'तीन', 4: 'चार', 5: 'पाँच',
-      6: 'छह', 7: 'सात', 8: 'आठ', 9: 'नौ', 10: 'दस'
-    };
-
-    if (lang === 'kn-IN') return kannadaWords[num] || num.toString();
-    if (lang === 'hi-IN') return hindiWords[num] || num.toString();
-    return englishWords[num] || num.toString();
-  };
-
-  let responseText = '';
+  // If items were matched from menu
   if (matchedItems.length > 0) {
+    // Merge with currentOrder if an existing draft exists
+    let updatedOrder = [...currentOrder];
+    for (const matched of matchedItems) {
+      const existingIdx = updatedOrder.findIndex(i => (i.name || i.dish?.name || '').toLowerCase() === matched.name.toLowerCase());
+      if (existingIdx >= 0) {
+        updatedOrder[existingIdx] = {
+          ...updatedOrder[existingIdx],
+          quantity: updatedOrder[existingIdx].quantity + matched.quantity,
+          subtotal: matched.price * (updatedOrder[existingIdx].quantity + matched.quantity)
+        };
+      } else {
+        updatedOrder.push({
+          ...matched,
+          subtotal: matched.price * matched.quantity
+        });
+      }
+    }
+
+    let responseText = '';
     if (matchedItems.length === 1) {
       const item = matchedItems[0];
       const qtyWord = getQuantityWord(item.quantity, language);
       responseText = language === 'kn-IN'
-        ? `ನೀವು ${qtyWord} ${item.name} ಬಯಸಿದ್ದೀರಿ. ಅದನ್ನು ನಿಮ್ಮ ಆರ್ಡರ್‌ಗೆ ಸೇರಿಸಲೇ?`
+        ? `ಖಂಡಿತ! ${qtyWord} ${item.name}. ಇನ್ನೇನಾದರೂ ಆರ್ಡರ್ ಮಾಡಲು ಬಯಸುತ್ತೀರಾ?`
         : language === 'hi-IN'
-          ? `आप ${qtyWord} ${item.name} चाहते हैं। क्या मैं इसे आपके ऑर्डर में जोड़ दूँ?`
-          : `You want ${qtyWord} ${item.name}. Shall I add it to your order?`;
+          ? `ज़रूर! ${qtyWord} ${item.name} जोड़ दिया है। क्या आप कुछ और लेना चाहेंगे?`
+          : `Sure! ${qtyWord} ${item.name}. Would you like anything else with that?`;
     } else {
       const summaryEn = matchedItems.map(i => `${getQuantityWord(i.quantity, 'en-IN')} ${i.name}`).join(' and ');
       const summaryKn = matchedItems.map(i => `${getQuantityWord(i.quantity, 'kn-IN')} ${i.name}`).join(' ಮತ್ತು ');
       const summaryHi = matchedItems.map(i => `${getQuantityWord(i.quantity, 'hi-IN')} ${i.name}`).join(' और ');
-
       responseText = language === 'kn-IN'
-        ? `ನೀವು ${summaryKn} ಬಯಸಿದ್ದೀರಿ. ಅವುಗಳನ್ನು ನಿಮ್ಮ ಆರ್ಡರ್‌ಗೆ ಸೇರಿಸಲೇ?`
+        ? `ಖಂಡಿತ! ${summaryKn} ಸೇರಿಸಲಾಗಿದೆ. ಇನ್ನೇನಾದರೂ ಬೇಕೇ?`
         : language === 'hi-IN'
-          ? `आप ${summaryHi} चाहते हैं। क्या मैं इन्हें आपके ऑर्डर में जोड़ दूँ?`
-          : `You want ${summaryEn}. Shall I add them to your order?`;
+          ? `ज़रूर! ${summaryHi} जोड़ दिए हैं। क्या आप कुछ और लेना चाहेंगे?`
+          : `Certainly! ${summaryEn}. Would you like anything else?`;
     }
 
     if (unrecognizedItems.length > 0) {
-      responseText += ` (Note: ${unrecognizedItems.join(', ')} is not on the menu)`;
+      responseText += language === 'kn-IN'
+        ? ` (ಗಮನಿಸಿ: "${unrecognizedItems.join(', ')}" ಲಭ್ಯವಿಲ್ಲ${suggestedAlternative ? `, ಬದಲಿಗೆ ${suggestedAlternative} ಪ್ರಯತ್ನಿಸಬಹುದು` : ''})`
+        : language === 'hi-IN'
+          ? ` (ध्यान दें: "${unrecognizedItems.join(', ')}" उपलब्ध नहीं है${suggestedAlternative ? `, इसके बदले ${suggestedAlternative} ले सकते हैं` : ''})`
+          : ` (Note: ${unrecognizedItems.join(', ')} is not on the menu${suggestedAlternative ? `, but our ${suggestedAlternative} is a great alternative` : ''})`;
     }
-  } else if (unrecognizedItems.length > 0) {
-    responseText = language === 'kn-IN'
-      ? `ಕ್ಷಮಿಸಿ, "${unrecognizedItems.join(', ')}" ನಮ್ಮ ಮೆನುವಿನಲ್ಲಿ ಲಭ್ಯವಿಲ್ಲ.`
-      : language === 'hi-IN'
-        ? `क्षमा करें, "${unrecognizedItems.join(', ')}" हमारे मेनू में उपलब्ध नहीं है।`
-        : "Sorry, I couldn't find that item on the menu.";
-  } else {
-    intent = 'UNKNOWN';
-    responseText = language === 'kn-IN'
-      ? "ಸ್ಪಷ್ಟವಾಗಿ ಕೇಳಿಸಲಿಲ್ಲ. ನಿಮ್ಮ ತಿಂಡಿಯನ್ನು ಹೇಳಿ (ಉದಾ: 'ಒಂದು ಮಸಾಲ ದೋಸೆ') ಅಥವಾ ಮೆನು ನೋಡಿ."
-      : language === 'hi-IN'
-        ? "मैं समझ नहीं पाया। कृपया अपना ऑर्डर बोलें (उदा: 'एक मसाला डोसा') या मेनू देखें।"
-        : "I didn't quite catch that. Please specify what you'd like to order (e.g. 'One Masala Dosa') or browse our menu.";
+
+    return {
+      success: true,
+      intent: currentOrder.length > 0 ? 'ADD_ITEM' : 'ORDER',
+      action: 'ADD',
+      items: matchedItems,
+      updatedOrder: updatedOrder,
+      requiresClarification: false,
+      clarificationQuestion: '',
+      unrecognizedItems,
+      lastDiscussedDish: matchedItems[0].name,
+      confidence: 0.96,
+      response: responseText,
+      provider: 'gemini_ai_fallback'
+    };
   }
+
+  // If customer requested an off-menu item with 0 menu matches
+  if (unrecognizedItems.length > 0) {
+    const unMsg = language === 'kn-IN'
+      ? `ಕ್ಷಮಿಸಿ, "${unrecognizedItems.join(', ')}" ನಮ್ಮ ಮೆನುವಿನಲ್ಲಿ ಲಭ್ಯವಿಲ್ಲ.${suggestedAlternative ? ` ನೀವು ${suggestedAlternative} ಪ್ರಯತ್ನಿಸಲು ಬಯಸುತ್ತೀರಾ?` : ''}`
+      : language === 'hi-IN'
+        ? `क्षमा करें, "${unrecognizedItems.join(', ')}" हमारे मेनू में उपलब्ध नहीं है।${suggestedAlternative ? ` क्या आप ${suggestedAlternative} आज़माना चाहेंगे?` : ''}`
+        : `Sorry, we don't serve ${unrecognizedItems.join(', ')} on our menu.${suggestedAlternative ? ` Would you like to try our popular ${suggestedAlternative} instead?` : ''}`;
+    return {
+      success: true,
+      intent: 'ORDER',
+      action: 'NONE',
+      items: [],
+      updatedOrder: currentOrder,
+      requiresClarification: false,
+      clarificationQuestion: '',
+      unrecognizedItems,
+      lastDiscussedDish,
+      confidence: 0.88,
+      response: unMsg,
+      provider: 'gemini_ai_fallback'
+    };
+  }
+
+  // Fallback for uninterpretable input
+  const unkMsg = language === 'kn-IN'
+    ? "ಸ್ಪಷ್ಟವಾಗಿ ಕೇಳಿಸಲಿಲ್ಲ. ನಿಮ್ಮ ತಿಂಡಿಯನ್ನು ಹೇಳಿ (ಉದಾ: 'ಎರಡು ಮಸಾಲ ದೋಸೆ') ಅಥವಾ ಶಿಫಾರಸು ಕೇಳಿ."
+    : language === 'hi-IN'
+      ? "मैं समझ नहीं पाया। कृपया अपना ऑर्डर बोलें (जैसे: 'दो मसाला डोसा') या मेनू की जानकारी लें।"
+      : "I didn't quite catch that. You can tell me what you'd like to eat (e.g. 'Two Masala Dosas') or ask for recommendations.";
 
   return {
     success: true,
-    intent,
-    items: matchedItems,
-    unrecognizedItems,
-    confidence: matchedItems.length > 0 ? 0.96 : (unrecognizedItems.length > 0 ? 0.85 : 0.4),
-    response: responseText,
+    intent: 'UNKNOWN',
+    action: 'NONE',
+    items: [],
+    updatedOrder: currentOrder,
+    requiresClarification: false,
+    clarificationQuestion: '',
+    unrecognizedItems: [],
+    lastDiscussedDish,
+    confidence: 0.4,
+    response: unkMsg,
     provider: 'gemini_ai_fallback'
   };
 };
 
 /**
  * POST /api/voice/parse-intent
- * Intelligent Natural Language Understanding (NLU) & Intent Parsing via Google Gemini
- * Strictly grounded against active MongoDB Menu and KnowledgeDoc context.
+ * Intelligent Natural Language Understanding (NLU) & Conversational Assistant via Google Gemini
+ * Strictly grounded against active MongoDB Menu, KnowledgeDocs, and full multi-turn conversation session.
  */
 router.post('/parse-intent', async (req, res) => {
   try {
-    const { text, language = 'en-IN', menu: clientMenu = [] } = req.body;
+    const {
+      text,
+      language = 'en-IN',
+      menu: clientMenu = [],
+      conversationHistory = [],
+      currentOrder = [],
+      lastDiscussedDish = null
+    } = req.body;
 
     if (!text || !text.trim()) {
       return res.status(400).json({
@@ -435,7 +861,9 @@ router.post('/parse-intent', async (req, res) => {
     try {
       if (mongoose.connection && mongoose.connection.readyState === 1) {
         if (!Array.isArray(activeMenu) || activeMenu.length === 0) {
-          activeMenu = await MenuItem.find({ isAvailable: true }).select('name price categorySlug type isSpecial dietaryTags ingredients description').lean();
+          activeMenu = await MenuItem.find({ isAvailable: true })
+            .select('name price categorySlug type isSpecial dietaryTags ingredients description')
+            .lean();
         }
         knowledgeDocs = await KnowledgeDoc.find({}).lean();
       }
@@ -445,10 +873,19 @@ router.post('/parse-intent', async (req, res) => {
 
     const apiKey = process.env.GEMINI_API_KEY;
     const isGeminiKeyConfigured = Boolean(
-      apiKey && apiKey.trim() !== '' && !apiKey.includes('your_gemini'));
+      apiKey && apiKey.trim() !== '' && !apiKey.includes('your_gemini')
+    );
 
     if (!isGeminiKeyConfigured) {
-      const fallbackResult = buildGroundedFallbackResponse(text, language, activeMenu, knowledgeDocs);
+      const fallbackResult = buildGroundedFallbackResponse(
+        text,
+        language,
+        activeMenu,
+        knowledgeDocs,
+        conversationHistory,
+        currentOrder,
+        lastDiscussedDish
+      );
       return res.json(fallbackResult);
     }
 
@@ -456,46 +893,60 @@ router.post('/parse-intent', async (req, res) => {
       const ai = new GoogleGenAI({ apiKey });
 
       const menuContext = activeMenu.map(m =>
-        `- "${m.name}" (ID: ${m._id || m.id}, Price: ₹${m.price}, Category: ${m.categorySlug}, Type: ${m.type}, Special: ${m.isSpecial ? 'Yes' : 'No'}, Tags: ${m.dietaryTags?.join(', ') || 'none'}, Ingredients: ${m.ingredients?.join(', ') || 'none'})`
+        `- "${m.name}" (ID: ${m._id || m.id}, Price: ₹${m.price}, Category: ${m.categorySlug}, Type: ${m.type}, Special: ${m.isSpecial ? 'Yes' : 'No'}, Tags: ${m.dietaryTags?.join(', ') || 'none'}, Ingredients: ${m.ingredients?.join(', ') || 'none'}, Description: ${m.description || ''})`
       ).join('\n');
 
       const knowledgeContext = knowledgeDocs.map(k =>
         `- [${k.category.toUpperCase()}] ${k.title}: ${k.content}`
       ).join('\n');
 
-      const systemPrompt = `You are the AI Voice Ordering Assistant for RESTOSMART, an intelligent self-service restaurant kiosk.
-Your job is to analyze spoken transcripts in English, Kannada (ಕನ್ನಡ), or Hindi (हिन्दी), classify the customer's intent, extract ordered dishes strictly matching the active menu, and formulate clear confirmation responses.
+      const historyContext = conversationHistory && conversationHistory.length > 0
+        ? conversationHistory.slice(-8).map(h => `${h.role === 'user' ? 'Customer' : 'Assistant'}: "${h.text}"`).join('\n')
+        : 'None (Start of conversation)';
 
-ACTIVE RESTAURANT MENU (GROUND TRUTH):
+      const currentOrderContext = currentOrder && currentOrder.length > 0
+        ? currentOrder.map(i => `- ${i.quantity}x "${i.name || i.dish?.name}" (₹${i.price || (i.dish && i.dish.price) || 0}) ${i.customizations?.length ? `[${i.customizations.join(', ')}]` : ''}`).join('\n')
+        : 'Empty (No items in draft)';
+
+      const systemPrompt = `You are RESTOSMART's Natural Conversational Restaurant Voice Assistant for an intelligent self-service kiosk.
+You act like a warm, attentive, expert restaurant waiter. Customers can speak naturally, ask questions about dishes and prices, change quantities, remove items, request dietary advice, and switch their minds.
+
+ACTIVE RESTAURANT MENU (STRICT GROUND TRUTH):
 ${menuContext}
 
-RESTAURANT KNOWLEDGE BASE & GUIDELINES:
+RESTAURANT KNOWLEDGE BASE & POLICIES:
 ${knowledgeContext}
 
-INTENT DEFINITIONS:
-- "ORDER": Customer expresses an intention to order dishes or beverages.
-- "CONFIRM": Customer confirms detected order (e.g. "yes", "confirm", "correct", "proceed", "ಹೌದು", "ಸರಿ", "हाँ", "कन्फर्म").
-- "CANCEL": Customer cancels order (e.g. "no", "cancel", "stop", "ಬೇಡ", "नहीं").
-- "MODIFY": Customer wants to change or edit dishes (e.g. "change it", "no change", "modify", "ಬದಲಾಯಿಸಿ", "ಬದಲೋ").
-- "RECOMMENDATION": Customer asks for dish suggestions, chef specials, bestsellers, spicy/mild food, or dietary advice.
-- "MENU_QUERY": Customer asks about what is on the menu, categories, pricing, or ingredients.
-- "HELP": Customer asks for assistance on using the kiosk.
-- "UNKNOWN": Gibberish, unrelated conversation, or uninterpretable input.
+CONVERSATION SESSION CONTEXT:
+Customer Selected Language: ${language} (en-IN: Indian English, kn-IN: Kannada, hi-IN: Hindi)
+Previous Conversation Turns:
+${historyContext}
 
-CRITICAL GROUNDING & CONFIRMATION RULES:
-1. NEVER invent or hallucinate dishes that do not exist in the ACTIVE RESTAURANT MENU.
-2. If the user asks for a dish that is NOT on the menu (e.g., "Paneer Tikka" or "Burger"), DO NOT place it in "items". Place it in "unrecognizedItems", and set "response" to: "Sorry, I couldn't find that item on the menu." (in ${language === 'kn-IN' ? 'Kannada' : language === 'hi-IN' ? 'Hindi' : 'English'}).
-3. For matched dishes in an "ORDER" intent, the "response" MUST follow this exact confirmation pattern:
-   - Single item: "You want [quantity word] [Item Name]. Shall I add it to your order?" (e.g. "You want one Masala Dosa. Shall I add it to your order?")
-   - Multiple items: "You want [quantity word 1] [Item1] and [quantity word 2] [Item2]. Shall I add them to your order?" (e.g. "You want two Masala Dosa and one Mango Lassi. Shall I add them to your order?")
-   Translate naturally if language is kn-IN (Kannada: "ನೀವು ಒಂದು Masala Dosa ಬಯಸಿದ್ದೀರಿ. ಅದನ್ನು ನಿಮ್ಮ ಆರ್ಡರ್‌ಗೆ ಸೇರಿಸಲೇ?") or hi-IN (Hindi: "आप एक Masala Dosa चाहते हैं। क्या मैं इसे आपके ऑर्डर में जोड़ दूँ?").
-4. If customer says "No", "cancel", or "change it", respond with: "Okay. What would you like to order instead?" (in the target language).
-5. If customer says "Yes" or confirms, respond with: "Added to your order. Taking you to the cart." (in the target language).
-6. "confidence": A float between 0.0 and 1.0.
+Current Draft Order:
+${currentOrderContext}
 
-Return strictly a valid JSON object matching this structure:
+Last Discussed Dish: ${lastDiscussedDish || 'None'}
+
+CONVERSATIONAL & GROUNDING RULES:
+1. STRICT GROUNDING: ONLY recognize dishes present in the ACTIVE RESTAURANT MENU. Never invent dishes, prices, ingredients, or availability.
+2. OFF-MENU REQUESTS: If customer asks for items NOT on the menu (e.g. Pizza, Burger, Pasta, Paneer Tikka), place them in "unrecognizedItems", DO NOT add them to order, politely explain unavailable, and suggest a real available menu item.
+3. PRONOUN RESOLUTION: Resolve "it", "that", "this", "ಅದು", "ಇದು", "यह", "इसे" using Last Discussed Dish or the single item in Current Draft Order.
+4. AMBIGUOUS QUANTITY CORRECTIONS: If customer says "make that three" or "actually three", and Current Draft Order contains MORE THAN ONE item and text does not name which item, set "intent" to "ASK_CLARIFICATION", "requiresClarification" to true, and ask a polite clarifying question (e.g. "Do you mean three Masala Dosas or three coffees?"). DO NOT alter quantities until clarified.
+5. QUANTITY CHANGES: If customer says "actually make that three" and the target dish is unambiguous, set intent to "MODIFY_QUANTITY", action to "UPDATE_QUANTITY", and update the quantity in "updatedOrder".
+6. ITEM REMOVAL: If customer says "remove the coffee" or "drop the soup", set intent to "REMOVE_ITEM", action to "REMOVE", and remove that dish from "updatedOrder".
+7. INGREDIENTS & ALLERGENS: Answer truthfully using menu ingredients and dietary tags. If not listed, state that kitchen staff can confirm.
+8. NATURAL LANGUAGE RESPONSES: Respond naturally in the customer's selected language (${language === 'kn-IN' ? 'Kannada (ಕನ್ನಡ)' : language === 'hi-IN' ? 'Hindi (हिन्दी)' : 'English'}). Be polite, friendly, and helpful like a real waiter. Avoid robotic boilerplate.
+
+STRUCTURED INTENTS:
+- "GREETING", "MENU_QUERY", "ITEM_QUERY", "PRICE_QUERY", "INGREDIENT_QUERY", "RECOMMENDATION", "ORDER", "ADD_ITEM", "MODIFY_QUANTITY", "REMOVE_ITEM", "MODIFY_CUSTOMIZATION", "CONFIRM", "CANCEL", "ASK_CLARIFICATION", "HELP", "UNKNOWN"
+
+ACTIONS:
+- "ADD", "REMOVE", "UPDATE_QUANTITY", "UPDATE_CUSTOMIZATION", "CLEAR", "NONE"
+
+Return strictly a valid JSON object matching this schema:
 {
-  "intent": "ORDER" | "CONFIRM" | "CANCEL" | "MODIFY" | "RECOMMENDATION" | "MENU_QUERY" | "HELP" | "UNKNOWN",
+  "intent": "GREETING" | "MENU_QUERY" | "ITEM_QUERY" | "PRICE_QUERY" | "INGREDIENT_QUERY" | "RECOMMENDATION" | "ORDER" | "ADD_ITEM" | "MODIFY_QUANTITY" | "REMOVE_ITEM" | "MODIFY_CUSTOMIZATION" | "CONFIRM" | "CANCEL" | "ASK_CLARIFICATION" | "HELP" | "UNKNOWN",
+  "action": "ADD" | "REMOVE" | "UPDATE_QUANTITY" | "UPDATE_CUSTOMIZATION" | "CLEAR" | "NONE",
   "items": [
     {
       "name": "string",
@@ -505,7 +956,20 @@ Return strictly a valid JSON object matching this structure:
       "customizations": ["string"]
     }
   ],
+  "updatedOrder": [
+    {
+      "name": "string",
+      "menuItemId": "string",
+      "quantity": 1,
+      "price": 80,
+      "customizations": ["string"]
+    }
+  ],
+  "targetItem": "string or null",
+  "requiresClarification": false,
+  "clarificationQuestion": "string",
   "unrecognizedItems": ["string"],
+  "lastDiscussedDish": "string or null",
   "confidence": 0.95,
   "response": "string"
 }`;
@@ -529,8 +993,14 @@ Return strictly a valid JSON object matching this structure:
         return res.json({
           success: true,
           intent: parsedJson.intent || 'UNKNOWN',
+          action: parsedJson.action || 'NONE',
           items: Array.isArray(parsedJson.items) ? parsedJson.items : [],
+          updatedOrder: Array.isArray(parsedJson.updatedOrder) ? parsedJson.updatedOrder : currentOrder,
+          targetItem: parsedJson.targetItem || null,
+          requiresClarification: Boolean(parsedJson.requiresClarification),
+          clarificationQuestion: parsedJson.clarificationQuestion || '',
           unrecognizedItems: Array.isArray(parsedJson.unrecognizedItems) ? parsedJson.unrecognizedItems : [],
+          lastDiscussedDish: parsedJson.lastDiscussedDish || lastDiscussedDish,
           confidence: Number(parsedJson.confidence) || 0.9,
           response: parsedJson.response || '',
           provider: 'gemini_ai'
@@ -540,7 +1010,15 @@ Return strictly a valid JSON object matching this structure:
       console.warn('Gemini API call failed, using grounded fallback parser:', geminiErr.message);
     }
 
-    const fallbackResult = buildGroundedFallbackResponse(text, language, activeMenu, knowledgeDocs);
+    const fallbackResult = buildGroundedFallbackResponse(
+      text,
+      language,
+      activeMenu,
+      knowledgeDocs,
+      conversationHistory,
+      currentOrder,
+      lastDiscussedDish
+    );
     return res.json(fallbackResult);
   } catch (error) {
     console.error('Fatal error in /api/voice/parse-intent:', error);

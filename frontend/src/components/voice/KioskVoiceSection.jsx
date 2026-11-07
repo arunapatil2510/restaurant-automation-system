@@ -76,6 +76,10 @@ export const KioskVoiceSection = ({
   const [candidateItems, setCandidateItems] = useState([]);
   const [manualInput, setManualInput] = useState('');
 
+  // Conversational Multi-Turn Session Memory
+  const [conversationHistory, setConversationHistory] = useState([]);
+  const [lastDiscussedDish, setLastDiscussedDish] = useState(null);
+
   const recognitionRef = useRef(null);
   const autoListenTimeoutRef = useRef(null);
   const silenceTimerRef = useRef(null);
@@ -88,6 +92,8 @@ export const KioskVoiceSection = ({
   const confirmedItemsRef = useRef(confirmedItems);
   const candidateItemsRef = useRef(candidateItems);
   const activeLanguageRef = useRef(activeLanguage);
+  const conversationHistoryRef = useRef(conversationHistory);
+  const lastDiscussedDishRef = useRef(lastDiscussedDish);
   const isParsingRef = useRef(false);
 
   // Keep refs synchronized on every render
@@ -106,6 +112,14 @@ export const KioskVoiceSection = ({
   useEffect(() => {
     activeLanguageRef.current = activeLanguage;
   }, [activeLanguage]);
+
+  useEffect(() => {
+    conversationHistoryRef.current = conversationHistory;
+  }, [conversationHistory]);
+
+  useEffect(() => {
+    lastDiscussedDishRef.current = lastDiscussedDish;
+  }, [lastDiscussedDish]);
 
   const currentLangConfig = SARVAM_SUPPORTED_LANGUAGES.find(l => l.code === activeLanguage) || SARVAM_SUPPORTED_LANGUAGES[0];
 
@@ -229,18 +243,21 @@ export const KioskVoiceSection = ({
       recognition.onerror = (event) => {
         console.warn('[KioskVoiceSection] Speech recognition error event:', event.error, event);
         if (event.error === 'not-allowed' || event.error === 'permission-denied') {
-          const errorMsg = getSpeechRecognitionErrorMessage(event.error, activeLanguage);
+          const errorMsg = getSpeechRecognitionErrorMessage(event.error, activeLanguageRef.current || activeLanguage);
           setErrorMessage(errorMsg);
           setVoiceState(VOICE_STATES.PERMISSION_DENIED);
+          voiceStateRef.current = VOICE_STATES.PERMISSION_DENIED;
         } else if (event.error === 'no-speech') {
           // If no speech heard, stay in current state or idle gracefully without error banner
-          if (voiceState === VOICE_STATES.LISTENING) {
+          if (voiceStateRef.current === VOICE_STATES.LISTENING) {
             setVoiceState(VOICE_STATES.IDLE);
+            voiceStateRef.current = VOICE_STATES.IDLE;
           }
         } else if (event.error !== 'aborted') {
-          const errorMsg = getSpeechRecognitionErrorMessage(event.error, activeLanguage);
+          const errorMsg = getSpeechRecognitionErrorMessage(event.error, activeLanguageRef.current || activeLanguage);
           setErrorMessage(errorMsg);
           setVoiceState(VOICE_STATES.ERROR);
+          voiceStateRef.current = VOICE_STATES.ERROR;
         }
       };
 
@@ -253,8 +270,9 @@ export const KioskVoiceSection = ({
           const textToProcess = pendingTranscriptRef.current.trim();
           setTranscript(textToProcess);
           processUserInput(textToProcess);
-        } else if (voiceState === VOICE_STATES.LISTENING && !hasProcessedRef.current) {
+        } else if (voiceStateRef.current === VOICE_STATES.LISTENING && !hasProcessedRef.current) {
           setVoiceState(VOICE_STATES.IDLE);
+          voiceStateRef.current = VOICE_STATES.IDLE;
         }
       };
 
@@ -387,21 +405,94 @@ export const KioskVoiceSection = ({
       return;
     }
 
-    // 5. Intelligent Intent Parsing & Menu Grounding via Shared Gemini Service
+    // 5. Intelligent Conversational Intent Parsing & Menu Grounding via Shared Gemini Service
     setVoiceState(VOICE_STATES.PROCESSING);
     voiceStateRef.current = VOICE_STATES.PROCESSING;
     isParsingRef.current = true;
+
+    // Track user input in conversation history
+    const userTurn = { role: 'user', text };
+    const updatedHistory = [...(conversationHistoryRef.current || []), userTurn].slice(-10);
+    setConversationHistory(updatedHistory);
+    conversationHistoryRef.current = updatedHistory;
+
+    const currentDraftOrder = [...currentConfirmed, ...currentCandidate];
 
     try {
       const result = await parseVoiceIntent({
         text,
         language: currentLang,
         menuItems,
-        context: currentStage
+        context: currentStage,
+        conversationHistory: updatedHistory,
+        currentOrder: currentDraftOrder,
+        lastDiscussedDish: lastDiscussedDishRef.current
       });
       setParsedResult(result);
 
-      if (result.intent === 'ORDER') {
+      if (result.lastDiscussedDish) {
+        setLastDiscussedDish(result.lastDiscussedDish);
+        lastDiscussedDishRef.current = result.lastDiscussedDish;
+      }
+
+      // Record assistant turn in conversation history
+      if (result.response) {
+        const assistantTurn = { role: 'assistant', text: result.response };
+        const historyWithReply = [...updatedHistory, assistantTurn].slice(-10);
+        setConversationHistory(historyWithReply);
+        conversationHistoryRef.current = historyWithReply;
+      }
+
+      // Handle Ambiguity Clarification
+      if (result.intent === 'ASK_CLARIFICATION' || result.requiresClarification) {
+        const clarQuestion = result.response || result.clarificationQuestion;
+        speakAndAutoListen(clarQuestion, currentLang, VOICE_STATES.LISTENING);
+        return;
+      }
+
+      // Handle Quantity Modification ("Make that three")
+      if (result.intent === 'MODIFY_QUANTITY' || result.action === 'UPDATE_QUANTITY') {
+        if (result.updatedOrder && result.updatedOrder.length > 0) {
+          // If candidate items were active, update candidate items
+          if (currentCandidate.length > 0) {
+            setCandidateItems(result.updatedOrder);
+            candidateItemsRef.current = result.updatedOrder;
+          } else {
+            setConfirmedItems(result.updatedOrder);
+            confirmedItemsRef.current = result.updatedOrder;
+          }
+        }
+        const confirmMsg = result.response || "Updated! Would you like anything else?";
+        speakAndAutoListen(confirmMsg, currentLang, currentCandidate.length > 0 ? VOICE_STATES.CONFIRMATION : VOICE_STATES.ASK_MORE);
+        return;
+      }
+
+      // Handle Item Removal ("Remove the coffee")
+      if (result.intent === 'REMOVE_ITEM' || result.action === 'REMOVE') {
+        if (result.updatedOrder) {
+          if (currentCandidate.length > 0) {
+            setCandidateItems(result.updatedOrder);
+            candidateItemsRef.current = result.updatedOrder;
+          }
+          setConfirmedItems(result.updatedOrder);
+          confirmedItemsRef.current = result.updatedOrder;
+        } else if (result.targetItem) {
+          const filterFn = (i) => !(i.name || i.dish?.name || '').toLowerCase().includes(result.targetItem.toLowerCase());
+          const newCand = currentCandidate.filter(filterFn);
+          const newConf = currentConfirmed.filter(filterFn);
+          setCandidateItems(newCand);
+          candidateItemsRef.current = newCand;
+          setConfirmedItems(newConf);
+          confirmedItemsRef.current = newConf;
+        }
+        const removeMsg = result.response || `Removed ${result.targetItem || 'item'} from your order.`;
+        const nextState = (confirmedItemsRef.current.length > 0 || candidateItemsRef.current.length > 0) ? VOICE_STATES.ASK_MORE : VOICE_STATES.IDLE;
+        speakAndAutoListen(removeMsg, currentLang, nextState);
+        return;
+      }
+
+      // Handle Ordering or Adding Items
+      if (result.intent === 'ORDER' || result.intent === 'ADD_ITEM' || result.action === 'ADD') {
         if (result.items && result.items.length > 0) {
           const itemsToConfirm = result.items.map(item => ({ ...item }));
           setCandidateItems(itemsToConfirm);
@@ -445,7 +536,7 @@ export const KioskVoiceSection = ({
       } else if (result.intent === 'ADD_MORE') {
         requestMoreItems();
       } else {
-        // Conversational / Recommendations / Menu Queries / Unknown
+        // Conversational / Price Query / Ingredient Query / Menu Query / Recommendations / Greeting / Help
         const returnState = currentConfirmed.length > 0 && currentVoiceState === VOICE_STATES.ASK_MORE
           ? VOICE_STATES.ASK_MORE
           : VOICE_STATES.LISTENING;

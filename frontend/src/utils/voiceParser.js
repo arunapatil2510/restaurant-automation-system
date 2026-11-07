@@ -15,13 +15,22 @@ import { menuItems as fallbackMenuItems } from '../data/mockData.js';
 const FILLER_PHRASES = [
   // English
   /^i want to order\s+/i,
+  /^i want to have\s+/i,
   /^i want\s+/i,
   /^i would like to order\s+/i,
+  /^i would like to have\s+/i,
   /^i would like\s+/i,
+  /^i'd like to order\s+/i,
+  /^i'd like to have\s+/i,
+  /^i'd like\s+/i,
   /^please give me\s+/i,
   /^give me\s+/i,
   /^can i get\s+/i,
   /^can i have\s+/i,
+  /^can i order\s+/i,
+  /^could i get\s+/i,
+  /^could i have\s+/i,
+  /^can you add\s+/i,
   /^bring me\s+/i,
   /^order\s+/i,
   /^add\s+/i,
@@ -102,6 +111,10 @@ export const calculateSimilarity = (s1, s2) => {
  */
 export const segmentTranscript = (transcript) => {
   let text = cleanTranscript(transcript);
+
+  // Normalize colloquial quantities like "a couple of" or "a pair of" to "2 "
+  text = text.replace(/\b(a\s+)?couple\s+(of\s+)?/gi, '2 ');
+  text = text.replace(/\b(a\s+)?pair\s+(of\s+)?/gi, '2 ');
 
   // Clean conversational prefixes
   for (const filler of FILLER_PHRASES) {

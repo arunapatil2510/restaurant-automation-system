@@ -1,7 +1,7 @@
-﻿const sampleData = require('../seed/sampleData.json');
+const sampleData = require('../seed/sampleData.json');
 
 async function runGeminiVoiceIntegrationTests() {
-  console.log('ðŸ§ª Running RESTOSMART Phase 4 Multilingual Voice Integration Test Suite...\n');
+  console.log('🧪 Running RESTOSMART Phase 4 Multilingual Voice Integration Test Suite...\n');
 
   const {
     parseVoiceIntent,
@@ -15,10 +15,10 @@ async function runGeminiVoiceIntegrationTests() {
 
   function assert(condition, message) {
     if (condition) {
-      console.log(`  âœ“ PASS: ${message}`);
+      console.log(`  ✓ PASS: ${message}`);
       passed++;
     } else {
-      console.error(`  âœ— FAIL: ${message}`);
+      console.error(`  ✗ FAIL: ${message}`);
       failed++;
     }
   }
@@ -71,71 +71,71 @@ async function runGeminiVoiceIntegrationTests() {
   // --- HINDI TESTS ---
   console.log('\n--- 2. HINDI TEST CASES ---');
 
-  // 2A. "à¤®à¥à¤à¥‡ à¤¦à¥‹ à¤®à¤¸à¤¾à¤²à¤¾ à¤¡à¥‹à¤¸à¤¾ à¤šà¤¾à¤¹à¤¿à¤à¥¤"
+  // 2A. "मुझे दो मसाला डोसा चाहिए।"
   const hiOrder1 = await parseVoiceIntent({
-    text: 'à¤®à¥à¤à¥‡ à¤¦à¥‹ à¤®à¤¸à¤¾à¤²à¤¾ à¤¡à¥‹à¤¸à¤¾ à¤šà¤¾à¤¹à¤¿à¤à¥¤',
+    text: 'मुझे दो मसाला डोसा चाहिए।',
     language: 'hi-IN',
     menuItems
   });
-  assert(hiOrder1.intent === 'ORDER', 'HI "à¤®à¥à¤à¥‡ à¤¦à¥‹ à¤®à¤¸à¤¾à¤²à¤¾ à¤¡à¥‹à¤¸à¤¾ à¤šà¤¾à¤¹à¤¿à¤à¥¤" -> Intent ORDER');
+  assert(hiOrder1.intent === 'ORDER', 'HI "मुझे दो मसाला डोसा चाहिए।" -> Intent ORDER');
   assert(hiOrder1.items.length === 1, 'HI Matched 1 dish');
   assert(hiOrder1.items[0]?.name === 'Masala Dosa', 'HI Matched dish is Masala Dosa');
   assert(hiOrder1.items[0]?.quantity === 2, 'HI Quantity is 2');
   assert(Boolean(hiOrder1.items[0]?.dish), 'HI Dish object grounded to active menu');
 
-  // 2B. "à¤à¤• à¤®à¥ˆà¤‚à¤—à¥‹ à¤²à¤¸à¥à¤¸à¥€ à¤­à¥€ à¤œà¥‹à¤¡à¤¼à¥‡à¤‚à¥¤"
+  // 2B. "एक मैंगो लस्सी भी जोड़ें।"
   const hiOrder2 = await parseVoiceIntent({
-    text: 'à¤à¤• à¤®à¥ˆà¤‚à¤—à¥‹ à¤²à¤¸à¥à¤¸à¥€ à¤­à¥€ à¤œà¥‹à¤¡à¤¼à¥‡à¤‚à¥¤',
+    text: 'एक मैंगो लस्सी भी जोड़ें।',
     language: 'hi-IN',
     menuItems
   });
-  assert(hiOrder2.intent === 'ORDER', 'HI "à¤à¤• à¤®à¥ˆà¤‚à¤—à¥‹ à¤²à¤¸à¥à¤¸à¥€ à¤­à¥€ à¤œà¥‹à¤¡à¤¼à¥‡à¤‚à¥¤" -> Intent ORDER');
+  assert(hiOrder2.intent === 'ORDER', 'HI "एक मैंगो लस्सी भी जोड़ें।" -> Intent ORDER');
   assert(hiOrder2.items.length === 1, 'HI Matched Mango Lassi');
   assert(hiOrder2.items[0]?.name === 'Mango Lassi', 'HI Dish is Mango Lassi');
   assert(hiOrder2.items[0]?.quantity === 1, 'HI Quantity is 1');
 
-  // 2C. "à¤¨à¤¹à¥€à¤‚, à¤‡à¤¸à¥‡ à¤¬à¤¦à¤² à¤¦à¥‹à¥¤"
+  // 2C. "नहीं, इसे बदल दो।"
   const hiReject = await parseVoiceIntent({
-    text: 'à¤¨à¤¹à¥€à¤‚, à¤‡à¤¸à¥‡ à¤¬à¤¦à¤² à¤¦à¥‹à¥¤',
+    text: 'नहीं, इसे बदल दो।',
     language: 'hi-IN',
     menuItems,
     context: 'CONFIRM_ITEM'
   });
-  assert(hiReject.intent === 'CANCEL' || hiReject.intent === 'MODIFY', `HI "à¤¨à¤¹à¥€à¤‚, à¤‡à¤¸à¥‡ à¤¬à¤¦à¤² à¤¦à¥‹à¥¤" -> Rejection (${hiReject.intent})`);
+  assert(hiReject.intent === 'CANCEL' || hiReject.intent === 'MODIFY', `HI "नहीं, इसे बदल दो।" -> Rejection (${hiReject.intent})`);
 
   // --- KANNADA TESTS ---
   console.log('\n--- 3. KANNADA TEST CASES ---');
 
-  // 3A. "à²¨à²¨à²—à³† à²Žà²°à²¡à³ à²®à²¸à²¾à²²à³† à²¦à³‹à²¸à³† à²¬à³‡à²•à³."
+  // 3A. "ನನಗೆ ಎರಡು ಮಸಾಲೆ ದೋಸೆ ಬೇಕು."
   const knOrder1 = await parseVoiceIntent({
-    text: 'à²¨à²¨à²—à³† à²Žà²°à²¡à³ à²®à²¸à²¾à²²à³† à²¦à³‹à²¸à³† à²¬à³‡à²•à³.',
+    text: 'ನನಗೆ ಎರಡು ಮಸಾಲೆ ದೋಸೆ ಬೇಕು.',
     language: 'kn-IN',
     menuItems
   });
-  assert(knOrder1.intent === 'ORDER', 'KN "à²¨à²¨à²—à³† à²Žà²°à²¡à³ à²®à²¸à²¾à²²à³† à²¦à³‹à²¸à³† à²¬à³‡à²•à³." -> Intent ORDER');
+  assert(knOrder1.intent === 'ORDER', 'KN "ನನಗೆ ಎರಡು ಮಸಾಲೆ ದೋಸೆ ಬೇಕು." -> Intent ORDER');
   assert(knOrder1.items.length === 1, 'KN Matched 1 dish');
   assert(knOrder1.items[0]?.name === 'Masala Dosa', 'KN Dish is Masala Dosa');
   assert(knOrder1.items[0]?.quantity === 2, 'KN Quantity is 2');
 
-  // 3B. "à²’à²‚à²¦à³ à²®à³à²¯à²¾à²‚à²—à³‹ à²²à²¸à³à²¸à²¿ à²•à³‚à²¡ à²¸à³‡à²°à²¿à²¸à²¿."
+  // 3B. "ಒಂದು ಮ್ಯಾಂಗೋ ಲಸ್ಸಿ ಕೂಡ ಸೇರಿಸಿ."
   const knOrder2 = await parseVoiceIntent({
-    text: 'à²’à²‚à²¦à³ à²®à³à²¯à²¾à²‚à²—à³‹ à²²à²¸à³à²¸à²¿ à²•à³‚à²¡ à²¸à³‡à²°à²¿à²¸à²¿.',
+    text: 'ಒಂದು ಮ್ಯಾಂಗೋ ಲಸ್ಸಿ ಕೂಡ ಸೇರಿಸಿ.',
     language: 'kn-IN',
     menuItems
   });
-  assert(knOrder2.intent === 'ORDER', 'KN "à²’à²‚à²¦à³ à²®à³à²¯à²¾à²‚à²—à³‹ à²²à²¸à³à²¸à²¿ à²•à³‚à²¡ à²¸à³‡à²°à²¿à²¸à²¿." -> Intent ORDER');
+  assert(knOrder2.intent === 'ORDER', 'KN "ಒಂದು ಮ್ಯಾಂಗೋ ಲಸ್ಸಿ ಕೂಡ ಸೇರಿಸಿ." -> Intent ORDER');
   assert(knOrder2.items.length === 1, 'KN Matched Mango Lassi');
   assert(knOrder2.items[0]?.name === 'Mango Lassi', 'KN Dish is Mango Lassi');
   assert(knOrder2.items[0]?.quantity === 1, 'KN Quantity is 1');
 
-  // 3C. "à²¬à³‡à²¡, à²…à²¦à²¨à³à²¨à³ à²¬à²¦à²²à²¾à²¯à²¿à²¸à²¿."
+  // 3C. "ಬೇಡ, ಅದನ್ನು ಬದಲಾಯಿಸಿ."
   const knReject = await parseVoiceIntent({
-    text: 'à²¬à³‡à²¡, à²…à²¦à²¨à³à²¨à³ à²¬à²¦à²²à²¾à²¯à²¿à²¸à²¿.',
+    text: 'ಬೇಡ, ಅದನ್ನು ಬದಲಾಯಿಸಿ.',
     language: 'kn-IN',
     menuItems,
     context: 'CONFIRM_ITEM'
   });
-  assert(knReject.intent === 'CANCEL' || knReject.intent === 'MODIFY', `KN "à²¬à³‡à²¡, à²…à²¦à²¨à³à²¨à³ à²¬à²¦à²²à²¾à²¯à²¿à²¸à²¿." -> Rejection (${knReject.intent})`);
+  assert(knReject.intent === 'CANCEL' || knReject.intent === 'MODIFY', `KN "ಬೇಡ, ಅದನ್ನು ಬದಲಾಯಿಸಿ." -> Rejection (${knReject.intent})`);
 
   // --- EDGE CASES ---
   console.log('\n--- 4. EDGE CASE TESTS ---');
@@ -148,7 +148,7 @@ async function runGeminiVoiceIntegrationTests() {
   });
   assert(offMenu.items.length === 0, 'Off-menu items are NEVER placed into verified items');
   assert(offMenu.unrecognizedItems.length > 0, 'Off-menu items recorded in unrecognizedItems');
-  assert(offMenu.response.toLowerCase().includes("couldn't find") || offMenu.response.toLowerCase().includes("not on the menu") || offMenu.response.includes("à²®à³†à²¨à³à²µà²¿à²¨à²²à³à²²à²¿") || offMenu.response.includes("à¤‰à¤ªà¤²à¤¬à¥à¤§ à¤¨à¤¹à¥€à¤‚"), 'Response politely informs off-menu status');
+  assert(offMenu.response.toLowerCase().includes("couldn't find") || offMenu.response.toLowerCase().includes("not on the menu") || offMenu.response.includes("ಮೆನುವಿನಲ್ಲಿ") || offMenu.response.includes("उपलब्ध नहीं"), 'Response politely informs off-menu status');
 
   // 4B. Gibberish / unrecognized input
   const gibberish = await parseVoiceIntent({

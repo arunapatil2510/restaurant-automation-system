@@ -34,7 +34,7 @@ import { useCart } from '../../context/CartContext';
 
 export const VoiceOrderModal = ({ isOpen, onClose, menuItems = [] }) => {
   const navigate = useNavigate();
-  const { addItem, kioskLanguage } = useCart();
+  const { addItem, kioskLanguage, setKioskLanguage } = useCart();
 
   const [activeLanguage, setActiveLanguage] = useState(kioskLanguage || 'en-IN');
   const [isListening, setIsListening] = useState(false);
@@ -52,6 +52,10 @@ export const VoiceOrderModal = ({ isOpen, onClose, menuItems = [] }) => {
   const [addedToCartSuccess, setAddedToCartSuccess] = useState(false);
   const [manualText, setManualText] = useState('');
 
+  // Multi-Turn Conversational Memory
+  const [conversationHistory, setConversationHistory] = useState([]);
+  const [lastDiscussedDish, setLastDiscussedDish] = useState(null);
+
   const recognitionRef = useRef(null);
   const silenceTimerRef = useRef(null);
   const autoListenTimeoutRef = useRef(null);
@@ -65,6 +69,8 @@ export const VoiceOrderModal = ({ isOpen, onClose, menuItems = [] }) => {
   const confirmedItemsRef = useRef(confirmedItems);
   const candidateItemsRef = useRef(candidateItems);
   const activeLanguageRef = useRef(activeLanguage);
+  const conversationHistoryRef = useRef(conversationHistory);
+  const lastDiscussedDishRef = useRef(lastDiscussedDish);
   const isParsingRef = useRef(false);
 
   useEffect(() => {
@@ -86,6 +92,20 @@ export const VoiceOrderModal = ({ isOpen, onClose, menuItems = [] }) => {
   useEffect(() => {
     activeLanguageRef.current = activeLanguage;
   }, [activeLanguage]);
+
+  useEffect(() => {
+    conversationHistoryRef.current = conversationHistory;
+  }, [conversationHistory]);
+
+  useEffect(() => {
+    lastDiscussedDishRef.current = lastDiscussedDish;
+  }, [lastDiscussedDish]);
+
+  useEffect(() => {
+    if (kioskLanguage && kioskLanguage !== activeLanguage) {
+      setActiveLanguage(kioskLanguage);
+    }
+  }, [kioskLanguage]);
 
   const currentLangConfig = SUPPORTED_LANGUAGES.find(l => l.code === activeLanguage) || SUPPORTED_LANGUAGES[0];
 
@@ -409,20 +429,94 @@ export const VoiceOrderModal = ({ isOpen, onClose, menuItems = [] }) => {
       return;
     }
 
-    // 5. Intelligent Intent Parsing & Menu Grounding via Shared Gemini Service
+    // 5. Intelligent Conversational Intent Parsing & Menu Grounding via Shared Gemini Service
     setIsProcessing(true);
     isParsingRef.current = true;
+
+    // Track user utterance in conversation history
+    const userTurn = { role: 'user', text };
+    const updatedHistory = [...(conversationHistoryRef.current || []), userTurn].slice(-10);
+    setConversationHistory(updatedHistory);
+    conversationHistoryRef.current = updatedHistory;
+
+    const currentDraftOrder = [...currentConfirmed, ...currentCandidate];
 
     try {
       const result = await parseVoiceIntent({
         text,
         language: currentLang,
         menuItems,
-        context: currentStage
+        context: currentStage,
+        conversationHistory: updatedHistory,
+        currentOrder: currentDraftOrder,
+        lastDiscussedDish: lastDiscussedDishRef.current
       });
       setParsedResult(result);
 
-      if (result.intent === 'ORDER') {
+      if (result.lastDiscussedDish) {
+        setLastDiscussedDish(result.lastDiscussedDish);
+        lastDiscussedDishRef.current = result.lastDiscussedDish;
+      }
+
+      // Record assistant reply in conversation history
+      if (result.response) {
+        const assistantTurn = { role: 'assistant', text: result.response };
+        const historyWithReply = [...updatedHistory, assistantTurn].slice(-10);
+        setConversationHistory(historyWithReply);
+        conversationHistoryRef.current = historyWithReply;
+      }
+
+      // Handle Ambiguity Clarification ("Do you mean three dosas or three coffees?")
+      if (result.intent === 'ASK_CLARIFICATION' || result.requiresClarification) {
+        const clarQuestion = result.response || result.clarificationQuestion;
+        setMicError(clarQuestion);
+        speakAndListen(clarQuestion, currentLang, false, isAskingMoreCurrent);
+        return;
+      }
+
+      // Handle Quantity Modification ("Actually make that three")
+      if (result.intent === 'MODIFY_QUANTITY' || result.action === 'UPDATE_QUANTITY') {
+        if (result.updatedOrder && result.updatedOrder.length > 0) {
+          if (currentCandidate.length > 0) {
+            setCandidateItems(result.updatedOrder);
+            candidateItemsRef.current = result.updatedOrder;
+          } else {
+            setConfirmedItems(result.updatedOrder);
+            confirmedItemsRef.current = result.updatedOrder;
+          }
+        }
+        const confirmMsg = result.response || "Updated! Would you like anything else?";
+        setMicError(null);
+        speakAndListen(confirmMsg, currentLang, currentCandidate.length > 0, currentConfirmed.length > 0);
+        return;
+      }
+
+      // Handle Item Removal ("Remove the coffee")
+      if (result.intent === 'REMOVE_ITEM' || result.action === 'REMOVE') {
+        if (result.updatedOrder) {
+          if (currentCandidate.length > 0) {
+            setCandidateItems(result.updatedOrder);
+            candidateItemsRef.current = result.updatedOrder;
+          }
+          setConfirmedItems(result.updatedOrder);
+          confirmedItemsRef.current = result.updatedOrder;
+        } else if (result.targetItem) {
+          const filterFn = (i) => !(i.name || i.dish?.name || '').toLowerCase().includes(result.targetItem.toLowerCase());
+          const newCand = currentCandidate.filter(filterFn);
+          const newConf = currentConfirmed.filter(filterFn);
+          setCandidateItems(newCand);
+          candidateItemsRef.current = newCand;
+          setConfirmedItems(newConf);
+          confirmedItemsRef.current = newConf;
+        }
+        const removeMsg = result.response || `Removed ${result.targetItem || 'item'} from your order.`;
+        setMicError(null);
+        speakAndListen(removeMsg, currentLang, false, confirmedItemsRef.current.length > 0);
+        return;
+      }
+
+      // Handle Ordering or Adding Items
+      if (result.intent === 'ORDER' || result.intent === 'ADD_ITEM' || result.action === 'ADD') {
         if (result.items && result.items.length > 0) {
           const itemsToConfirm = result.items.map(item => ({ ...item }));
           setCandidateItems(itemsToConfirm);
@@ -470,7 +564,7 @@ export const VoiceOrderModal = ({ isOpen, onClose, menuItems = [] }) => {
       } else if (result.intent === 'ADD_MORE') {
         requestMoreItems();
       } else {
-        // Conversational (RECOMMENDATION, MENU_QUERY, HELP, GREETING, GRATITUDE, UNKNOWN)
+        // Conversational (PRICE_QUERY, INGREDIENT_QUERY, MENU_QUERY, RECOMMENDATION, HELP, GREETING, GRATITUDE)
         setMicError(result.response);
         speakAndListen(result.response || getConversationalResponse(INTENT_TYPES.UNKNOWN, currentLang), currentLang, false, isAskingMoreCurrent);
       }
@@ -589,6 +683,7 @@ export const VoiceOrderModal = ({ isOpen, onClose, menuItems = [] }) => {
                 className={`voice-lang-pill ${activeLanguage === lang.code ? 'active' : ''}`}
                 onClick={() => {
                   setActiveLanguage(lang.code);
+                  if (setKioskLanguage) setKioskLanguage(lang.code);
                   speakAndListen(lang.greeting, lang.code, false);
                 }}
               >

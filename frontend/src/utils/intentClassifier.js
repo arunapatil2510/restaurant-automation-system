@@ -6,18 +6,33 @@
 import { FOOD_TRANSLATIONS } from './multilingualVoiceEngine.js';
 
 export const INTENT_TYPES = {
-  FOOD_ORDER: 'FOOD_ORDER',
-  CONFIRMATION: 'CONFIRMATION',
-  CANCEL: 'CANCEL',
-  MODIFY: 'MODIFY',
+  // Conversational & NLU standard intents
   GREETING: 'GREETING',
+  MENU_QUERY: 'MENU_QUERY',
+  ITEM_QUERY: 'ITEM_QUERY',
+  PRICE_QUERY: 'PRICE_QUERY',
+  INGREDIENT_QUERY: 'INGREDIENT_QUERY',
+  RECOMMENDATION: 'RECOMMENDATION',
+  ORDER: 'ORDER',
+  ADD_ITEM: 'ADD_ITEM',
+  MODIFY_QUANTITY: 'MODIFY_QUANTITY',
+  REMOVE_ITEM: 'REMOVE_ITEM',
+  MODIFY_CUSTOMIZATION: 'MODIFY_CUSTOMIZATION',
+  CONFIRM: 'CONFIRM',
+  CANCEL: 'CANCEL',
+  ASK_CLARIFICATION: 'ASK_CLARIFICATION',
   HELP: 'HELP',
   GRATITUDE: 'GRATITUDE',
+  UNKNOWN: 'UNKNOWN',
+
+  // Legacy mappings for backwards compatibility with existing UI handlers
+  FOOD_ORDER: 'FOOD_ORDER',
+  CONFIRMATION: 'CONFIRMATION',
+  MODIFY: 'MODIFY',
   DINE_IN: 'DINE_IN',
   TAKEAWAY: 'TAKEAWAY',
   FINISH_ORDER: 'FINISH_ORDER',
-  ADD_MORE: 'ADD_MORE',
-  UNKNOWN: 'UNKNOWN'
+  ADD_MORE: 'ADD_MORE'
 };
 
 // Conversational responses across English, Kannada, Hindi
@@ -28,9 +43,19 @@ export const INTENT_RESPONSES = {
     'hi-IN': "नमस्ते! रेस्टोस्मार्ट में आपका स्वागत है। आप क्या खाना चाहेंगे?"
   },
   [INTENT_TYPES.HELP]: {
-    'en-IN': "You can order directly by speaking your dishes, like 'Two Masala Dosa and one Mango Lassi', or explore our menu below.",
-    'kn-IN': "ನೀವು ನಿಮ್ಮ ತಿಂಡಿಗಳನ್ನು ನೇರವಾಗಿ ಹೇಳಬಹುದು, ಉದಾ: 'ಎರಡು ಮಸಾಲ ದೋಸೆ ಮತ್ತು ಒಂದು ಮ್ಯಾಂಗೋ ಲಸ್ಸಿ'.",
-    'hi-IN': "आप बोलकर ऑर्डर कर सकते हैं, जैसे 'दो मसाला डोसा और एक मैंगो लस्सी', या मेनू देख सकते हैं।"
+    'en-IN': "You can order directly by speaking your dishes, like 'Two Masala Dosa and one Mango Lassi', or ask for prices and recommendations.",
+    'kn-IN': "ನೀವು ನಿಮ್ಮ ತಿಂಡಿಗಳನ್ನು ನೇರವಾಗಿ ಹೇಳಬಹುದು (ಉದಾ: 'ಎರಡು ಮಸಾಲ ದೋಸೆ ಮತ್ತು ಒಂದು ಮ್ಯಾಂಗೋ ಲಸ್ಸಿ'), ಅಥವಾ ಬೆಲೆ ಮತ್ತು ಶಿಫಾರಸುಗಳನ್ನು ಕೇಳಬಹುದು.",
+    'hi-IN': "आप बोलकर सीधे ऑर्डर कर सकते हैं (जैसे: 'दो मसाला डोसा और एक मैंगो लस्सी'), या कीमत और सलाह पूछ सकते हैं।"
+  },
+  [INTENT_TYPES.MENU_QUERY]: {
+    'en-IN': "Our menu features Starters, Main Course Curries, Biryani & Rice, South Indian Beverages, and Desserts. What would you like?",
+    'kn-IN': "ನಮ್ಮ ಮೆನುವಿನಲ್ಲಿ Starters, Main Course, Biryani & Rice, South Indian Beverages ಮತ್ತು Desserts ಲಭ್ಯವಿದೆ. ನಿಮಗೆ ಯಾವುದು ಬೇಕು?",
+    'hi-IN': "हमारे मेनू में Starters, Main Course, Biryani & Rice, South Indian Beverages और Desserts शामिल हैं। आप क्या पसंद करेंगे?"
+  },
+  [INTENT_TYPES.RECOMMENDATION]: {
+    'en-IN': "Our popular specials today are Masala Dosa, Paneer Butter Masala, and Chicken Dum Biryani. Would you like to try any of these?",
+    'kn-IN': "ನಮ್ಮ ಇಂದಿನ ಜನಪ್ರಿಯ ಸ್ಪೆಷಲ್ಸ್: ಮಸಾಲ ದೋಸೆ, ಪನೀರ್ ಬಟರ್ ಮಸಾಲ ಮತ್ತು ಚಿಕನ್ ದಮ್ ಬಿರಿಯಾನಿ. ನೀವು ಇವುಗಳಲ್ಲಿ ಯಾವುದಾದರೂ ಬಯಸುವಿರಾ?",
+    'hi-IN': "हमारे लोकप्रिय शेफ स्पेशल हैं: मसाला डोसा, पनीर बटर मसाला और चिकन दम बिरयानी। क्या आप इनमें से कुछ लेना चाहेंगे?"
   },
   [INTENT_TYPES.GRATITUDE]: {
     'en-IN': "You're very welcome! Enjoy your meal at RESTOSMART.",
@@ -41,6 +66,11 @@ export const INTENT_RESPONSES = {
     'en-IN': "Added to your order. Would you like anything else?",
     'kn-IN': "ನಿಮ್ಮ ಆರ್ಡರ್‌ಗೆ ಸೇರಿಸಲಾಗಿದೆ. ಬೇರೆ ಏನಾದರೂ ಬೇಕೇ?",
     'hi-IN': "आपके ऑर्डर में जोड़ दिया गया है। क्या आप कुछ और लेना चाहेंगे?"
+  },
+  [INTENT_TYPES.CONFIRM]: {
+    'en-IN': "Your order is confirmed. Taking you to the cart to review.",
+    'kn-IN': "ನಿಮ್ಮ ಆರ್ಡರ್ ದೃಢೀಕರಿಸಲಾಗಿದೆ. ಕಾರ್ಟ್ ಪರಿಶೀಲಿಸಲು ಕರೆದೊಯ್ಯಲಾಗುತ್ತಿದೆ.",
+    'hi-IN': "आपका ऑर्डर कन्फर्म हो गया है। कार्ट देखने के लिए ले जा रहे हैं।"
   },
   [INTENT_TYPES.FINISH_ORDER]: {
     'en-IN': "Your order is confirmed. Taking you to the cart to review.",
