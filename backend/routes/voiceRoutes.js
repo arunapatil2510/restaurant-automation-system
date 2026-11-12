@@ -197,6 +197,29 @@ const buildGroundedFallbackResponse = (
   const clean = (text || '').trim();
   const lower = clean.toLowerCase();
 
+  // Helper for language script/token detection
+  const detectSpokenLanguage = (text = '', preferredLocale = 'en-IN') => {
+    if (!text || typeof text !== 'string') return preferredLocale;
+    const trimmed = text.trim();
+    if (/[\u0C80-\u0CFF]/.test(trimmed)) return 'kn-IN';
+    if (/[\u0900-\u097F]/.test(trimmed)) return 'hi-IN';
+    const lower = trimmed.toLowerCase();
+    const words = lower.split(/[\s,?.!।;:"'()-]+/).filter(Boolean);
+    const knMarkers = ['nanage', 'namage', 'ondu', 'eradu', 'mooru', 'naalku', 'aidu', 'beku', 'beda', 'kodi', 'haaki', 'serisi', 'maadi', 'thindi', 'oota', 'khara', 'swalpa', 'chennagide', 'hegide', 'enu', 'yavudhu', 'yavudu', 'isthe', 'aste', 'ivattina', 'suchisi', 'gondalavide', 'sahaya', 'shifarassu', 'vishesha'];
+    const hiMarkers = ['mujhe', 'hume', 'hame', 'chahiye', 'dijiye', 'kripya', 'batao', 'khana', 'peena', 'thoda', 'teekha', 'meetha', 'bhaiya', 'kya', 'hai', 'hain', 'nahi', 'haan', 'bhi', 'aur', 'kuch', 'achha', 'accha', 'badhiya', 'lao', 'dena', 'karo', 'hatao', 'badlo', 'shakahari', 'madad', 'bataiye', 'lagao'];
+    let kn = 0, hi = 0;
+    for (const w of words) {
+      if (knMarkers.includes(w)) kn++;
+      if (hiMarkers.includes(w)) hi++;
+    }
+    if (kn > 0 && kn >= hi) return 'kn-IN';
+    if (hi > 0 && hi > kn) return 'hi-IN';
+    return preferredLocale;
+  };
+
+  const detectedLang = detectSpokenLanguage(clean, language);
+  const activeLang = language || detectedLang || 'en-IN';
+
   // Helper for quantity words
   const getQuantityWord = (qty, lang) => {
     const num = parseInt(qty, 10) || 1;
@@ -216,22 +239,22 @@ const buildGroundedFallbackResponse = (
     'ಸಮೋಸಾ': 'Crispy Veg Samosa (2 Pcs)', 'ಸಮೋಸ': 'Crispy Veg Samosa (2 Pcs)', 'समोसा': 'Crispy Veg Samosa (2 Pcs)', 'समोसे': 'Crispy Veg Samosa (2 Pcs)',
     'gobi manchurian': 'Gobi Manchurian', 'gobi': 'Gobi Manchurian', 'ಗೋಬಿ': 'Gobi Manchurian', 'गोबी मंचूरियन': 'Gobi Manchurian', 'गोबी': 'Gobi Manchurian',
     'chicken kabab': 'Chicken Kabab', 'kabab': 'Chicken Kabab', 'kebab': 'Chicken Kabab', 'ಕಬಾಬ್': 'Chicken Kabab', 'कबाब': 'Chicken Kabab',
-    'paneer butter masala': 'Paneer Butter Masala', 'paneer butter': 'Paneer Butter Masala', 'paneer masala': 'Paneer Butter Masala', 'ಪನೀರ್ ಬಟರ್': 'Paneer Butter Masala', 'पनीर बटर': 'Paneer Butter Masala',
+    'paneer butter masala': 'Paneer Butter Masala', 'paneer butter': 'Paneer Butter Masala', 'paneer masala': 'Paneer Butter Masala', 'paneer': 'Paneer Butter Masala', 'ಪನೀರ್ ಬಟರ್': 'Paneer Butter Masala', 'ಪನೀರ್': 'Paneer Butter Masala', 'पनीर बटर': 'Paneer Butter Masala', 'पनीर': 'Paneer Butter Masala',
     'butter naan': 'Butter Naan', 'naan': 'Butter Naan', 'ನಾನ್': 'Butter Naan', 'नान': 'Butter Naan',
-    'dal tadka': 'Dal Tadka', 'dal': 'Dal Tadka', 'ದಾಲ್': 'Dal Tadka', 'दाल': 'Dal Tadka',
+    'dal tadka': 'Dal Tadka', 'dal': 'Dal Tadka', 'dal fry': 'Dal Tadka', 'ದಾಲ್': 'Dal Tadka', 'दाल': 'Dal Tadka',
     'north indian deluxe thali': 'North Indian Deluxe Thali', 'deluxe thali': 'North Indian Deluxe Thali', 'thali': 'North Indian Deluxe Thali', 'ಥಾಲಿ': 'North Indian Deluxe Thali', 'थाली': 'North Indian Deluxe Thali',
-    'south indian meals': 'South Indian Meals', 'meals': 'South Indian Meals', 'ಊಟ': 'South Indian Meals',
+    'south indian meals': 'South Indian Meals', 'meals': 'South Indian Meals', 'oota': 'South Indian Meals', 'ಊಟ': 'South Indian Meals',
     'veg fried rice': 'Veg Fried Rice', 'fried rice': 'Veg Fried Rice',
     'veg dum biryani': 'Veg Dum Biryani', 'veg biryani': 'Veg Dum Biryani',
     'chicken dum biryani': 'Chicken Dum Biryani', 'chicken biryani': 'Chicken Dum Biryani', 'biryani': 'Chicken Dum Biryani', 'ಬಿರಿಯಾನಿ': 'Chicken Dum Biryani', 'बिरयानी': 'Chicken Dum Biryani',
     'jeera rice': 'Jeera Rice',
-    'south indian filter coffee': 'South Indian Filter Coffee', 'filter coffee': 'South Indian Filter Coffee', 'coffee': 'South Indian Filter Coffee', 'ಕಾಫಿ': 'South Indian Filter Coffee', 'कॉफी': 'South Indian Filter Coffee', 'कॉफ़ी': 'South Indian Filter Coffee',
-    'masala chai': 'Masala Chai', 'chai': 'Masala Chai', 'tea': 'Masala Chai', 'ಚಹಾ': 'Masala Chai', 'चाय': 'Masala Chai',
+    'south indian filter coffee': 'South Indian Filter Coffee', 'filter coffee': 'South Indian Filter Coffee', 'coffee': 'South Indian Filter Coffee', 'kaapi': 'South Indian Filter Coffee', 'ಕಾಫಿ': 'South Indian Filter Coffee', 'कॉफी': 'South Indian Filter Coffee', 'कॉफ़ी': 'South Indian Filter Coffee',
+    'masala chai': 'Masala Chai', 'chai': 'Masala Chai', 'tea': 'Masala Chai', 'chaha': 'Masala Chai', 'ಚಹಾ': 'Masala Chai', 'चाय': 'Masala Chai',
     'fresh lime juice': 'Fresh Lime Juice', 'lime juice': 'Fresh Lime Juice', 'ನಿಂಬೆ ಜ್ಯೂಸ್': 'Fresh Lime Juice', 'नींबू पानी': 'Fresh Lime Juice',
     'cold coffee with ice cream': 'Cold Coffee with Ice Cream', 'cold coffee': 'Cold Coffee with Ice Cream',
     'gulab jamun (2 pcs)': 'Gulab Jamun (2 Pcs)', 'gulab jamun': 'Gulab Jamun (2 Pcs)', 'ಗುಲಾಬ್ ಜಾಮೂನ್': 'Gulab Jamun (2 Pcs)', 'गुलाब जामुन': 'Gulab Jamun (2 Pcs)',
     "sizzling s'mores brownie": "Sizzling S'mores Brownie", 'brownie': "Sizzling S'mores Brownie",
-    'hot & sour veg soup': 'Hot & Sour Veg Soup', 'hot and sour soup': 'Hot & Sour Veg Soup', 'soup': 'Hot & Sour Veg Soup', 'ಸೂಪ್': 'Hot & Sour Veg Soup', 'सूप': 'Hot & Sour Veg Soup',
+    'hot & sour veg soup': 'Hot & Sour Veg Soup', 'hot and sour soup': 'Hot & Sour Veg Soup', 'soup': 'Hot & Sour Veg Soup', 'ಸೂಪ್': 'Hot & Sour Veg Soup', 'ಸೂಪ್': 'Hot & Sour Veg Soup',
     'peri peri french fries': 'Peri Peri French Fries', 'peri peri fries': 'Peri Peri French Fries', 'french fries': 'Peri Peri French Fries', 'fries': 'Peri Peri French Fries',
     'mango lassi': 'Mango Lassi', 'lassi': 'Mango Lassi', 'ಮ್ಯಾಂಗೋ ಲಸ್ಸಿ': 'Mango Lassi', 'मैंगो लस्सी': 'Mango Lassi', 'लस्सी': 'Mango Lassi'
   };
@@ -239,6 +262,8 @@ const buildGroundedFallbackResponse = (
   const numMap = {
     'a': 1, 'an': 1, 'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5, 'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10,
     'couple': 2, 'pair': 2,
+    'ondu': 1, 'eradu': 2, 'mooru': 3, 'naalku': 4, 'aidu': 5,
+    'ek': 1, 'do': 2, 'teen': 3, 'chaar': 4, 'paanch': 5,
     'ಒಂದು': 1, 'ಎರಡು': 2, 'ಮೂರು': 3, 'ನಾಲ್ಕು': 4, 'ಐದು': 5, '೧': 1, '೨': 2, '೩': 3, '೪': 4, '೫': 5,
     'एक': 1, 'दो': 2, 'तीन': 3, 'चार': 4, 'पाँच': 5, 'पांच': 5, '१': 1, '२': 2, '३': 3, '४': 4, '५': 5
   };
@@ -314,38 +339,83 @@ const buildGroundedFallbackResponse = (
     };
   }
 
-  // 3. MENU QUERY (What is available / Categories / Options)
+  // 2.5 CONTEXTUAL ALTERNATIVES / LESS SPICY REQUESTS
+  const isAlternativeRequest = (
+    lower.includes('then give me') || lower.includes('give me something') || lower.includes('suggest an alternative') ||
+    lower.includes('less spicy') || lower.includes('something mild') || lower.includes('ಹಾಗಾದರೆ') ||
+    lower.includes('ಖಾರ ಕಡಿಮೆ') || lower.includes('ಸೌಮ್ಯ') || lower.includes('तो फिर') || lower.includes('कम तीखा')
+  );
+  if (isAlternativeRequest && (lower.includes('less spicy') || lower.includes('mild') || lower.includes('ಖಾರ ಕಡಿಮೆ') || lower.includes('ಸೌಮ್ಯ') || lower.includes('कम तीखा'))) {
+    const milds = menuItems.filter(m => m.isAvailable !== false && (!m.dietaryTags?.includes('spicy') || m.dietaryTags?.includes('mild') || m.categorySlug === 'desserts' || m.categorySlug === 'beverages')).slice(0, 3).map(m => m.name);
+    const msg = activeLang === 'kn-IN'
+      ? `ಖಾರ ಕಡಿಮೆ ಇರುವ ಸೌಮ್ಯ ಆಯ್ಕೆಗಳಿಗೆ: ${milds.join(', ')} ಅತ್ಯುತ್ತಮ. ಯಾವುದನ್ನು ಸೇರಿಸಲೇ?`
+      : activeLang === 'hi-IN'
+        ? `कम तीखे और सादे व्यंजनों में: ${milds.join(', ')} बढ़िया विकल्प हैं। क्या इनमें से कुछ जोड़ दूँ?`
+        : `For milder dishes with less spice, I recommend: ${milds.join(', ')}. Would you like me to add one of these?`;
+    return {
+      success: true,
+      intent: 'RECOMMENDATION',
+      action: 'NONE',
+      items: [],
+      updatedOrder: currentOrder,
+      requiresClarification: false,
+      clarificationQuestion: '',
+      unrecognizedItems: [],
+      lastDiscussedDish,
+      confidence: 0.95,
+      response: msg,
+      provider: 'gemini_ai_fallback'
+    };
+  }
+
+  // 3. MENU QUERY (What is available / Categories / Dietary / Low Spice)
   if (lower.includes('what do you have') || lower.includes('show menu') || lower.includes('what is available') ||
       lower.includes('menu options') || lower.includes('categories') || lower.includes('what drinks') ||
       lower.includes('what starters') || lower.includes('what desserts') ||
-      lower.includes('ಮೆನು') || lower.includes('ಏನಿದೆ') || lower.includes('ಏನು ಸಿಗುತ್ತೆ') ||
-      lower.includes('मेनू') || lower.includes('क्या मिलेगा') || lower.includes('क्या उपलब्ध है')) {
+      lower.includes('vegetarian') || lower.includes('pure veg') || lower.includes('veg food') || lower.includes('something vegetarian') ||
+      lower.includes('without much spice') || lower.includes('not spicy') || lower.includes('anything mild') ||
+      lower.includes('ಮೆನು') || lower.includes('ಏನಿದೆ') || lower.includes('ಏನು ಸಿಗುತ್ತೆ') || lower.includes('ತಿಂಡಿಗೆ') || lower.includes('ಶಾಕಾಹಾರಿ') || lower.includes('ಸಸ್ಯಾಹಾರಿ') || lower.includes('ಖಾರ ಕಡಿಮೆ ಇರುವುದು') || lower.includes('ಖಾರ ಇಲ್ಲದ') ||
+      lower.includes('मेनू') || lower.includes('क्या मिलेगा') || lower.includes('क्या उपलब्ध है') || lower.includes('शाकाहारी') || lower.includes('बिना तीखे') || lower.includes('कम तीखा')) {
     let msg = '';
-    if (lower.includes('drink') || lower.includes('beverage') || lower.includes('ಕುಡಿಯಲು') || lower.includes('पेय')) {
+    if (lower.includes('vegetarian') || lower.includes('pure veg') || lower.includes('veg food') || lower.includes('something vegetarian') || lower.includes('ಶಾಕಾಹಾರಿ') || lower.includes('ಸಸ್ಯಾಹಾರಿ') || lower.includes('शाकाहारी') || lower.includes('वेज')) {
+      const vegDishes = menuItems.filter(m => m.type === 'veg' && m.isAvailable !== false).slice(0, 4).map(m => m.name);
+      msg = activeLang === 'kn-IN'
+        ? `ನಮ್ಮಲ್ಲಿ ಲಭ್ಯವಿರುವ ಮುಖ್ಯ ಶಾಕಾಹಾರಿ ತಿಂಡಿಗಳು: ${vegDishes.join(', ')}. ನೀವು ಯಾವುದು ಬಯಸುತ್ತೀರಿ?`
+        : activeLang === 'hi-IN'
+          ? `हमारे मुख्य शाकाहारी व्यंजनों में शामिल हैं: ${vegDishes.join(', ')}। आप क्या पसंद करेंगे?`
+          : `Our pure vegetarian specialties include: ${vegDishes.join(', ')}. What would you like to order?`;
+    } else if (lower.includes('without much spice') || lower.includes('less spice') || lower.includes('not spicy') || lower.includes('anything mild') || lower.includes('ಖಾರ ಕಡಿಮೆ ಇರುವುದು') || lower.includes('ಖಾರ ಇಲ್ಲದ') || lower.includes('बिना तीखे') || lower.includes('कम तीखा')) {
+      const mildDishes = menuItems.filter(m => m.isAvailable !== false && (!m.dietaryTags?.includes('spicy') || m.dietaryTags?.includes('mild') || m.categorySlug === 'desserts')).slice(0, 3).map(m => m.name);
+      msg = activeLang === 'kn-IN'
+        ? `ಖಾರವಿಲ್ಲದ ಸೌಮ್ಯ ತಿಂಡಿಗಳಿಗೆ: ${mildDishes.join(', ')} ಅತ್ಯುತ್ತಮ. ನೀವು ಯಾವುದನ್ನು ಆದೇಶಿಸಲು ಬಯಸುತ್ತೀರಿ?`
+        : activeLang === 'hi-IN'
+          ? `कम तीखे और सादे व्यंजनों में: ${mildDishes.join(', ')} बढ़िया विकल्प हैं। आप क्या लेना चाहेंगे?`
+          : `For mild dishes without much spice, we have: ${mildDishes.join(', ')}. Which one would you prefer?`;
+    } else if (lower.includes('drink') || lower.includes('beverage') || lower.includes('ಕುಡಿಯಲು') || lower.includes('पेय')) {
       const drinks = menuItems.filter(m => m.categorySlug === 'beverages' && m.isAvailable !== false).map(m => m.name);
-      msg = language === 'kn-IN'
+      msg = activeLang === 'kn-IN'
         ? `ನಮ್ಮಲ್ಲಿ ಲಭ್ಯವಿರುವ ಪಾನೀಯಗಳು: ${drinks.join(', ')}.`
-        : language === 'hi-IN'
+        : activeLang === 'hi-IN'
           ? `हमारे पेय पदार्थों में शामिल हैं: ${drinks.join(', ')}।`
           : `Our available beverages include: ${drinks.join(', ')}.`;
     } else if (lower.includes('starter') || lower.includes('ತಿಂಡಿ') || lower.includes('स्टार्टर')) {
       const starters = menuItems.filter(m => m.categorySlug === 'starters' && m.isAvailable !== false).map(m => m.name);
-      msg = language === 'kn-IN'
+      msg = activeLang === 'kn-IN'
         ? `ನಮ್ಮ ಸ್ಟಾರ್ಟರ್ಸ್‌ಗಳು: ${starters.join(', ')}.`
-        : language === 'hi-IN'
+        : activeLang === 'hi-IN'
           ? `हमारे स्टार्टर्स में शामिल हैं: ${starters.join(', ')}।`
           : `Our starters include: ${starters.join(', ')}.`;
     } else if (lower.includes('dessert') || lower.includes('sweet') || lower.includes('ಸಿಹಿ') || lower.includes('मीठा')) {
       const desserts = menuItems.filter(m => m.categorySlug === 'desserts' && m.isAvailable !== false).map(m => m.name);
-      msg = language === 'kn-IN'
+      msg = activeLang === 'kn-IN'
         ? `ನಮ್ಮ ಸಿಹಿ ತಿನಿಸುಗಳು: ${desserts.join(', ')}.`
-        : language === 'hi-IN'
+        : activeLang === 'hi-IN'
           ? `हमारे मीठे व्यंजनों में शामिल हैं: ${desserts.join(', ')}।`
           : `Our desserts include: ${desserts.join(', ')}.`;
     } else {
-      msg = language === 'kn-IN'
+      msg = activeLang === 'kn-IN'
         ? 'ನಮ್ಮ ಮೆನುವಿನಲ್ಲಿ Starters, Main Course, Biryani & Rice, South Indian Beverages ಮತ್ತು Desserts ಲಭ್ಯವಿದೆ. ನಿಮಗೆ ಯಾವುದು ಬೇಕು?'
-        : language === 'hi-IN'
+        : activeLang === 'hi-IN'
           ? 'हमारे मेनू में Starters, Main Course, Biryani & Rice, South Indian Beverages और Desserts उपलब्ध हैं। आप क्या पसंद करेंगे?'
           : 'Our menu features Starters, Main Course Curries, Biryani & Rice, South Indian Beverages, and Desserts. What would you like?';
     }
@@ -446,30 +516,35 @@ const buildGroundedFallbackResponse = (
     }
   }
 
-  // 6. RECOMMENDATIONS
+  // 6. RECOMMENDATIONS (Natural queries: "What should I eat?", "Suggest something nice", "I'm confused", etc.)
   if (lower.includes('recommend') || lower.includes('suggest') || lower.includes('special') ||
       lower.includes('bestseller') || lower.includes('popular') || lower.includes('what should i') ||
-      lower.includes('ಶಿಫಾರಸು') || lower.includes('ಸ್ಪೆಷಲ್') || lower.includes('सलाह') || lower.includes('स्पेशल')) {
+      lower.includes('suggest something') || lower.includes('what is good') || lower.includes('confused') || lower.includes('what to eat') ||
+      lower.includes('ಶಿಫಾರಸು') || lower.includes('ಸ್ಪೆಷಲ್') || lower.includes('ಸೂಚಿಸಿ') || lower.includes('ತಿನ್ನಲು') ||
+      lower.includes('ಒಳ್ಳೆಯದನ್ನು') || lower.includes('ಚೆನ್ನಾಗಿದೆ') || lower.includes('ಗೊಂದಲ') || lower.includes('ಯಾವುದು ತಗೋಳಿ') ||
+      lower.includes('सलाह') || lower.includes('स्पेशल') || lower.includes('क्या खाना चाहिए') || lower.includes('क्या खाऊँ') ||
+      lower.includes('कुछ अच्छा') || lower.includes('बढ़िया') || lower.includes('यहाँ क्या अच्छा है') || lower.includes('कन्फ्यूज') ||
+      lower.includes('olleyadu') || lower.includes('chennagide') || lower.includes('suchisi') || lower.includes('achha batao') || lower.includes('badhiya')) {
     let responseText = '';
     if (lower.includes('mild') || lower.includes('not too spicy') || lower.includes('less spicy') || lower.includes('sweet') || lower.includes('ಸಿಹಿ')) {
       const mildDishes = menuItems.filter(m => m.isAvailable !== false && (m.dietaryTags?.includes('mild') || m.categorySlug === 'desserts' || m.name.includes('Dosa'))).slice(0, 3).map(m => m.name);
-      responseText = language === 'kn-IN'
+      responseText = activeLang === 'kn-IN'
         ? `ಖಾರವಿಲ್ಲದ ಸೌಮ್ಯ ಆಯ್ಕೆಗಳಿಗೆ: ${mildDishes.join(', ')} ಅತ್ಯುತ್ತಮ.`
-        : language === 'hi-IN'
+        : activeLang === 'hi-IN'
           ? `कम तीखे और हल्के व्यंजनों के लिए: ${mildDishes.join(', ')} बढ़िया विकल्प हैं।`
           : `For mild dishes that aren't too spicy, I recommend: ${mildDishes.join(', ')}.`;
     } else if (lower.includes('spicy') || lower.includes('ಖಾರ') || lower.includes('तीखा')) {
       const spicyDishes = menuItems.filter(m => m.isAvailable !== false && (m.dietaryTags?.includes('spicy') || m.name.includes('Manchurian') || m.name.includes('Kabab') || m.name.includes('Biryani'))).slice(0, 3).map(m => m.name);
-      responseText = language === 'kn-IN'
+      responseText = activeLang === 'kn-IN'
         ? `ಖಾರವಾದ ರುಚಿಗೆ: ${spicyDishes.join(', ')} ಪ್ರಯತ್ನಿಸಿ.`
-        : language === 'hi-IN'
+        : activeLang === 'hi-IN'
           ? `तीखे खाने के शौकीनों के लिए: ${spicyDishes.join(', ')} बेहद लोकप्रिय हैं।`
           : `For spicy favorites, I highly recommend: ${spicyDishes.join(', ')}.`;
     } else {
       const specials = menuItems.filter(m => m.isSpecial && m.isAvailable !== false).slice(0, 3).map(m => m.name);
-      responseText = language === 'kn-IN'
+      responseText = activeLang === 'kn-IN'
         ? `ನಮ್ಮ ಇಂದಿನ ಮುಖ್ಯ ಶೆಫ್ ಸ್ಪೆಷಲ್ಸ್: ${specials.join(', ')}.`
-        : language === 'hi-IN'
+        : activeLang === 'hi-IN'
           ? `हमारे शेफ के आज के खास स्पेशल: ${specials.join(', ')} हैं।`
           : `Our chef's top recommendations today are: ${specials.join(', ')}. Would you like to try any?`;
     }
@@ -493,9 +568,9 @@ const buildGroundedFallbackResponse = (
   if (/^(yes|confirm|correct|proceed|okay|ok|done|place order|add it|add them|yes please|sure|yep|yeah)\b/i.test(lower) ||
       /^(ಹೌದು|ಸರಿ|ಖಚಿತ|ಆರ್ಡರ್ ಮಾಡಿ|ಖಚಿತಪಡಿಸಿ|ಆಯಿತು|ಹಾ)/i.test(lower) ||
       /^(हाँ|हाँजी|हाँ जी|कन्फर्म|सही है|ऑर्डर करो|ठीक है|हाँ ठीक है|हां)/i.test(lower)) {
-    const msg = language === 'kn-IN'
+    const msg = activeLang === 'kn-IN'
       ? 'ನಿಮ್ಮ ಆರ್ಡರ್ ದೃಢೀಕರಿಸಲಾಗಿದೆ. ಕಾರ್ಟ್‌ಗೆ ಕರೆದೊಯ್ಯಲಾಗುತ್ತಿದೆ.'
-      : language === 'hi-IN'
+      : activeLang === 'hi-IN'
         ? 'आपका ऑर्डर कन्फर्म हो गया है। कार्ट पर ले जा रहे हैं।'
         : 'Your order is confirmed. Taking you to the cart.';
     return {
@@ -509,6 +584,31 @@ const buildGroundedFallbackResponse = (
       unrecognizedItems: [],
       lastDiscussedDish,
       confidence: 0.98,
+      response: msg,
+      provider: 'gemini_ai_fallback'
+    };
+  }
+
+  // 7.5 MIND CHANGE / REPLACEMENT ("I changed my mind", "Can I have something else instead?")
+  if (lower.includes('changed my mind') || lower.includes('change my mind') || lower.includes('something else instead') ||
+      lower.includes('ಮನಸ್ಸು ಬದಲಾಗಿದೆ') || lower.includes('ಯೋಚನೆ ಬದಲಾಗಿದೆ') || lower.includes('ಬೇರೆ ಏನಾದರೂ ಕೊಡಿ') ||
+      lower.includes('मन बदल गया') || lower.includes('इसके बदले कुछ और')) {
+    const msg = activeLang === 'kn-IN'
+      ? 'ಖಂಡಿತ, ನಿಮ್ಮ ಮನಸ್ಸು ಬದಲಾಗಿದ್ದರೆ ಪರವಾಗಿಲ್ಲ! ಬದಲಿಗೆ ನೀವು ಏನನ್ನು ಆರ್ಡರ್ ಮಾಡಲು ಬಯಸುತ್ತೀರಿ?'
+      : activeLang === 'hi-IN'
+        ? 'कोई बात नहीं! आप इसके बदले क्या ऑर्डर करना चाहेंगे?'
+        : 'No problem at all! What would you like to order instead?';
+    return {
+      success: true,
+      intent: 'MODIFY',
+      action: 'NONE',
+      items: [],
+      updatedOrder: currentOrder,
+      requiresClarification: false,
+      clarificationQuestion: '',
+      unrecognizedItems: [],
+      lastDiscussedDish,
+      confidence: 0.96,
       response: msg,
       provider: 'gemini_ai_fallback'
     };
@@ -539,19 +639,55 @@ const buildGroundedFallbackResponse = (
     };
   }
 
-  // 9. REMOVE ITEM ("Remove the coffee", "Drop the soup", "Don't want lassi", "ಹಟಾವೋ", "ತೆಗೆದುಹಾಕಿ")
+  // 9. REMOVE ITEM ("Remove the coffee", "Drop the soup", "Remove the last item", "ಕೊನೆಯ ತಿಂಡಿ ತೆಗೆದುಹಾಕಿ")
   if (lower.includes('remove') || lower.includes('drop') || lower.includes('delete') ||
       lower.includes("don't want") || lower.includes('dont want') || lower.includes('take off') ||
       lower.includes('ತೆಗೆದುಹಾಕಿ') || lower.includes('ಬೇಡ') || lower.includes('ಹಟಾವೋ') || lower.includes('हटाओ') || lower.includes('निकाल दो')) {
-    const dishToRemove = findReferencedDish(lower);
+    // Relative last item removal
+    const isLastItemRemoval = lower.includes('last item') || lower.includes('last one') || lower.includes('ಕೊನೆಯ') || lower.includes('आखिरी') || lower.includes('लास्ट');
+    if (isLastItemRemoval && currentOrder && currentOrder.length > 0) {
+      const removedDish = currentOrder[currentOrder.length - 1];
+      const targetName = removedDish.name || removedDish.dish?.name;
+      const updated = currentOrder.slice(0, -1);
+      const msg = activeLang === 'kn-IN'
+        ? `ಸರಿ, ನಿಮ್ಮ ಆರ್ಡರ್‌ನಿಂದ ${targetName} ತೆಗೆದುಹಾಕಲಾಗಿದೆ.`
+        : activeLang === 'hi-IN'
+          ? `ज़रूर, मैंने आपके ऑर्डर से ${targetName} हटा दिया है।`
+          : `Sure, I've removed ${targetName} from your order.`;
+      return {
+        success: true,
+        intent: 'REMOVE_ITEM',
+        action: 'REMOVE',
+        items: [],
+        updatedOrder: updated,
+        targetItem: targetName,
+        requiresClarification: false,
+        clarificationQuestion: '',
+        unrecognizedItems: [],
+        lastDiscussedDish: null,
+        confidence: 0.98,
+        response: msg,
+        provider: 'gemini_ai_fallback'
+      };
+    }
+
+    let dishToRemove = findReferencedDish(lower);
+    if (!dishToRemove && currentOrder && currentOrder.length > 0) {
+      dishToRemove = currentOrder.find(item => {
+        const iName = (item.name || item.dish?.name || '').toLowerCase();
+        return iName.split(/\s+/).some(w => w.length > 3 && lower.includes(w));
+      });
+    }
+
     if (dishToRemove && currentOrder && currentOrder.length > 0) {
+      const remName = (dishToRemove.name || '').toLowerCase();
       const updated = currentOrder.filter(item => {
         const iName = (item.name || item.dish?.name || '').toLowerCase();
-        return !iName.includes(dishToRemove.name.toLowerCase());
+        return !iName.includes(remName) && !remName.includes(iName);
       });
-      const msg = language === 'kn-IN'
+      const msg = activeLang === 'kn-IN'
         ? `ಸರಿ, ನಿಮ್ಮ ಆರ್ಡರ್‌ನಿಂದ ${dishToRemove.name} ತೆಗೆದುಹಾಕಲಾಗಿದೆ.`
-        : language === 'hi-IN'
+        : activeLang === 'hi-IN'
           ? `ज़रूर, मैंने आपके ऑर्डर से ${dishToRemove.name} हटा दिया है।`
           : `Sure, I've removed ${dishToRemove.name} from your order.`;
       return {
@@ -572,9 +708,50 @@ const buildGroundedFallbackResponse = (
     }
   }
 
-  // 10. QUANTITY MODIFICATION & AMBIGUITY CLARIFICATION ("Make that three", "Change dosa to 2")
+  // 10. QUANTITY MODIFICATION & INCREMENTS ("Give me one more", "Make that three", "Change dosa to 2")
+  const isIncrementOne = (
+    lower.includes('one more') || lower.includes('give me one more') || lower.includes('add one more') ||
+    lower.includes('ಇನ್ನೊಂದು ಕೊಡಿ') || lower.includes('ಇನ್ನೊಂದು') || lower.includes('ಒಂದು ಹೆಚ್ಚು') ||
+    lower.includes('एक और दो') || lower.includes('एक और') || lower.includes('ek aur')
+  );
+
+  if (isIncrementOne && currentOrder && currentOrder.length > 0) {
+    const targetItem = findReferencedDish(lower) || (lastDiscussedDish ? menuItems.find(m => m.name.toLowerCase() === lastDiscussedDish.toLowerCase()) : null) || currentOrder[currentOrder.length - 1];
+    const targetName = targetItem.name || targetItem.dish?.name;
+    const updated = currentOrder.map(i => {
+      const iName = (i.name || i.dish?.name || '').toLowerCase();
+      if (iName.includes(targetName.toLowerCase()) || targetName.toLowerCase().includes(iName)) {
+        const newQ = (i.quantity || 1) + 1;
+        const price = i.price || (i.dish && i.dish.price) || 0;
+        return { ...i, quantity: newQ, subtotal: price * newQ };
+      }
+      return i;
+    });
+    const updatedItem = updated.find(i => (i.name || i.dish?.name || '').toLowerCase().includes(targetName.toLowerCase())) || updated[0];
+    const msg = activeLang === 'kn-IN'
+      ? `ಖಂಡಿತ! ಇನ್ನೊಂದು ${targetName} ಸೇರಿಸಲಾಗಿದೆ, ಈಗ ನಿಮ್ಮ ಆರ್ಡರ್‌ನಲ್ಲಿ ಒಟ್ಟು ${updatedItem.quantity}.`
+      : activeLang === 'hi-IN'
+        ? `ज़रूर! एक और ${targetName} जोड़ दिया है, अब आपके ऑर्डर में कुल ${updatedItem.quantity} हैं।`
+        : `Certainly! I've added one more ${targetName}, making it ${updatedItem.quantity} in your order.`;
+    return {
+      success: true,
+      intent: 'MODIFY_QUANTITY',
+      action: 'UPDATE_QUANTITY',
+      items: updated,
+      updatedOrder: updated,
+      targetItem: targetName,
+      requiresClarification: false,
+      clarificationQuestion: '',
+      unrecognizedItems: [],
+      lastDiscussedDish: targetName,
+      confidence: 0.96,
+      response: msg,
+      provider: 'gemini_ai_fallback'
+    };
+  }
+
   if (lower.includes('make that') || lower.includes('make it') || lower.includes('change') ||
-      lower.includes('instead of') || lower.includes('quantity to') || lower.includes('ಬದಲಾಯಿಸಿ') || lower.includes('बदलो')) {
+      lower.includes('instead of') || lower.includes('quantity to') || lower.includes('ಬದಲಾಯಿಸಿ') || lower.includes('ಮಾಡಿ') || lower.includes('बदलो') || lower.includes('कर दो')) {
     // Extract new quantity number
     let newQty = 1;
     for (const [w, v] of Object.entries(numMap)) {
@@ -592,9 +769,9 @@ const buildGroundedFallbackResponse = (
     // If ambiguous: multiple items in currentOrder and customer says "make that three" without naming dish
     if (!explicitDish && currentOrder && currentOrder.length > 1) {
       const itemNames = currentOrder.map(i => i.name || i.dish?.name);
-      const question = language === 'kn-IN'
+      const question = activeLang === 'kn-IN'
         ? `ನೀವು 3 ${itemNames.join(' ಅಥವಾ 3 ')} ಎಂದು ಹೇಳುತ್ತಿದ್ದೀರಾ?`
-        : language === 'hi-IN'
+        : activeLang === 'hi-IN'
           ? `क्या आपका मतलब 3 ${itemNames.join(' या 3 ')} से है?`
           : `Do you mean three ${itemNames.join(' or three ')}?`;
       return {
@@ -618,16 +795,16 @@ const buildGroundedFallbackResponse = (
     if (targetItemName && currentOrder && currentOrder.length > 0) {
       const updated = currentOrder.map(i => {
         const iName = (i.name || i.dish?.name || '').toLowerCase();
-        if (iName.includes(targetItemName.toLowerCase())) {
+        if (iName.includes(targetItemName.toLowerCase()) || targetItemName.toLowerCase().includes(iName)) {
           const price = i.price || (i.dish && i.dish.price) || 0;
           return { ...i, quantity: newQty, subtotal: price * newQty };
         }
         return i;
       });
-      const qtyWord = getQuantityWord(newQty, language);
-      const msg = language === 'kn-IN'
+      const qtyWord = getQuantityWord(newQty, activeLang);
+      const msg = activeLang === 'kn-IN'
         ? `ಸರಿ! ${targetItemName} ಪ್ರಮಾಣವನ್ನು ${qtyWord} ಕ್ಕೆ ಬದಲಾಯಿಸಲಾಗಿದೆ.`
-        : language === 'hi-IN'
+        : activeLang === 'hi-IN'
           ? `ठीक है! ${targetItemName} की संख्या बदलकर ${qtyWord} कर दी गई है।`
           : `Got it! Updated ${targetItemName} to ${qtyWord}. Would you like anything else?`;
       return {

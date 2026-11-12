@@ -31,6 +31,7 @@ import {
   getConversationalResponse 
 } from '../../utils/intentClassifier.js';
 import { useCart } from '../../context/CartContext';
+import { VoiceGuidancePanel } from './VoiceGuidancePanel.jsx';
 
 export const VoiceOrderModal = ({ isOpen, onClose, menuItems = [] }) => {
   const navigate = useNavigate();
@@ -452,6 +453,7 @@ export const VoiceOrderModal = ({ isOpen, onClose, menuItems = [] }) => {
         lastDiscussedDish: lastDiscussedDishRef.current
       });
       setParsedResult(result);
+      const responseLang = result.detectedLanguage || currentLang;
 
       if (result.lastDiscussedDish) {
         setLastDiscussedDish(result.lastDiscussedDish);
@@ -470,7 +472,7 @@ export const VoiceOrderModal = ({ isOpen, onClose, menuItems = [] }) => {
       if (result.intent === 'ASK_CLARIFICATION' || result.requiresClarification) {
         const clarQuestion = result.response || result.clarificationQuestion;
         setMicError(clarQuestion);
-        speakAndListen(clarQuestion, currentLang, false, isAskingMoreCurrent);
+        speakAndListen(clarQuestion, responseLang, false, isAskingMoreCurrent);
         return;
       }
 
@@ -487,7 +489,7 @@ export const VoiceOrderModal = ({ isOpen, onClose, menuItems = [] }) => {
         }
         const confirmMsg = result.response || "Updated! Would you like anything else?";
         setMicError(null);
-        speakAndListen(confirmMsg, currentLang, currentCandidate.length > 0, currentConfirmed.length > 0);
+        speakAndListen(confirmMsg, responseLang, currentCandidate.length > 0, currentConfirmed.length > 0);
         return;
       }
 
@@ -511,7 +513,7 @@ export const VoiceOrderModal = ({ isOpen, onClose, menuItems = [] }) => {
         }
         const removeMsg = result.response || `Removed ${result.targetItem || 'item'} from your order.`;
         setMicError(null);
-        speakAndListen(removeMsg, currentLang, false, confirmedItemsRef.current.length > 0);
+        speakAndListen(removeMsg, responseLang, false, confirmedItemsRef.current.length > 0);
         return;
       }
 
@@ -524,8 +526,8 @@ export const VoiceOrderModal = ({ isOpen, onClose, menuItems = [] }) => {
           setIsAskingMore(false);
           isAskingMoreRef.current = false;
 
-          const confirmationPrompt = result.response || formatOrderConfirmationPrompt(itemsToConfirm, currentLang);
-          speakAndListen(confirmationPrompt, currentLang, true, false);
+          const confirmationPrompt = result.response || formatOrderConfirmationPrompt(itemsToConfirm, responseLang);
+          speakAndListen(confirmationPrompt, responseLang, true, false);
         } else {
           const fallbackAskMore = currentConfirmed.length > 0 && isAskingMoreCurrent;
           setIsConfirming(false);
@@ -534,10 +536,10 @@ export const VoiceOrderModal = ({ isOpen, onClose, menuItems = [] }) => {
           isAskingMoreRef.current = fallbackAskMore;
 
           const unMsg = result.response || (result.unrecognizedItems?.length > 0
-            ? formatUnknownItemPrompt(result.unrecognizedItems, currentLang)
-            : getConversationalResponse(INTENT_TYPES.UNKNOWN, currentLang));
+            ? formatUnknownItemPrompt(result.unrecognizedItems, responseLang)
+            : getConversationalResponse(INTENT_TYPES.UNKNOWN, responseLang));
           setMicError(unMsg);
-          speakAndListen(unMsg, currentLang, false, fallbackAskMore);
+          speakAndListen(unMsg, responseLang, false, fallbackAskMore);
         }
       } else if (result.intent === 'CONFIRM') {
         if (candidateItemsRef.current.length > 0) {
@@ -545,7 +547,7 @@ export const VoiceOrderModal = ({ isOpen, onClose, menuItems = [] }) => {
         } else if (currentConfirmed.length > 0) {
           handleFinalizeOrder();
         } else {
-          speakAndListen(result.response || langConfig.greeting, currentLang, false, false);
+          speakAndListen(result.response || langConfig.greeting, responseLang, false, false);
         }
       } else if (result.intent === 'CANCEL' || result.intent === 'MODIFY') {
         if (candidateItemsRef.current.length > 0) {
@@ -553,20 +555,20 @@ export const VoiceOrderModal = ({ isOpen, onClose, menuItems = [] }) => {
         } else if (currentConfirmed.length > 0) {
           handleFinalizeOrder();
         } else {
-          speakAndListen(result.response || langConfig.askChange, currentLang, false, false);
+          speakAndListen(result.response || langConfig.askChange, responseLang, false, false);
         }
       } else if (result.intent === 'FINISH_ORDER') {
         if (currentConfirmed.length > 0) {
           handleFinalizeOrder();
         } else {
-          speakAndListen(result.response, currentLang, false, false);
+          speakAndListen(result.response, responseLang, false, false);
         }
       } else if (result.intent === 'ADD_MORE') {
         requestMoreItems();
       } else {
         // Conversational (PRICE_QUERY, INGREDIENT_QUERY, MENU_QUERY, RECOMMENDATION, HELP, GREETING, GRATITUDE)
         setMicError(result.response);
-        speakAndListen(result.response || getConversationalResponse(INTENT_TYPES.UNKNOWN, currentLang), currentLang, false, isAskingMoreCurrent);
+        speakAndListen(result.response || getConversationalResponse(INTENT_TYPES.UNKNOWN, responseLang), responseLang, false, isAskingMoreCurrent);
       }
     } catch (err) {
       console.warn('[VoiceOrderModal] Error during intent parsing:', err);
@@ -867,6 +869,18 @@ export const VoiceOrderModal = ({ isOpen, onClose, menuItems = [] }) => {
               )}
             </div>
           )}
+
+          {/* Customer Voice Guidance Panel */}
+          <div style={{ marginTop: '0.75rem', marginBottom: '0.75rem' }}>
+            <VoiceGuidancePanel
+              language={activeLanguage}
+              onSelectPrompt={(promptText) => {
+                setManualText(promptText);
+                setTranscript(promptText);
+                processVoiceInput(promptText);
+              }}
+            />
+          </div>
 
           {/* Manual Text Fallback */}
           <div className="voice-manual-fallback">

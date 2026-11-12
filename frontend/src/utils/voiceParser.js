@@ -41,7 +41,7 @@ const FILLER_PHRASES = [
   /^and\s+/i,
   /^also\s+/i,
 
-  // Kannada
+  // Kannada (Native & Kanglish)
   /^ನನಗೆ ಆರ್ಡರ್ ಬೇಕು\s+/i,
   /^ನನಗೆ\s+/i,
   /^ನಮಗೆ\s+/i,
@@ -51,8 +51,14 @@ const FILLER_PHRASES = [
   /^ಆರ್ಡರ್\s+/i,
   /^ಮತ್ತು\s+/i,
   /^ಜೊತೆಗೆ\s+/i,
+  /^nanage\s+/i,
+  /^namage\s+/i,
+  /^dayavittu\s+/i,
+  /^kodi\s+/i,
+  /^beku\s+/i,
+  /^ondu\s+nimisha\s+/i,
 
-  // Hindi
+  // Hindi (Native & Hinglish)
   /^मुझे ऑर्डर करना है\s+/i,
   /^मुझे\s+/i,
   /^हमे\s+/i,
@@ -62,6 +68,17 @@ const FILLER_PHRASES = [
   /^लाइए\s+/i,
   /^ऑर्डर\s+/i,
   /^और\s+/i,
+  /^भैया\s+/i,
+  /^अन्ना\s+/i,
+  /^bhaiya\s+/i,
+  /^anna\s+/i,
+  /^boss\s+/i,
+  /^mujhe\s+/i,
+  /^hume\s+/i,
+  /^kripya\s+/i,
+  /^dena\s+/i,
+  /^de do\s+/i,
+  /^chahiye\s+/i,
 ];
 
 /**
@@ -150,6 +167,12 @@ export const segmentTranscript = (transcript) => {
       } else if (!isNaN(parseInt(firstWord, 10))) {
         quantity = parseInt(firstWord, 10);
         foodQuery = words.slice(1).join(' ');
+      } else if (words.length > 1 && MULTILINGUAL_NUMBERS[words[1].toLowerCase()] !== undefined) {
+        quantity = MULTILINGUAL_NUMBERS[words[1].toLowerCase()];
+        foodQuery = [words[0], ...words.slice(2)].join(' ');
+      } else if (words.length > 1 && !isNaN(parseInt(words[1], 10))) {
+        quantity = parseInt(words[1], 10);
+        foodQuery = [words[0], ...words.slice(2)].join(' ');
       } else {
         // Check if quantity word is at end (e.g. "masala dosa 2" or "ದೋಸೆ ಎರಡು" or "डोसा दो")
         const lastWord = words[words.length - 1].toLowerCase();
@@ -163,9 +186,11 @@ export const segmentTranscript = (transcript) => {
       }
     }
 
-    // Clean residual measurement words
+    // Clean residual measurement words and trailing verbal suffixes
     foodQuery = foodQuery
       .replace(/^(plates?|portions?|bowls?|glasses?|cups?|orders?|pieces?|ಪ್ಲೇಟ್|ಕಪ್|ಗ್ಲಾಸ್|ಪ್ಲೇಟ್ಸ್|प्लेट|कप|ग्लास)\s+(of\s+)?/i, '')
+      .replace(/\s+(laga do|la do|de do|dena|karo|bataiye|batao|thanni|tanni|kodi|maadi|beku|chahiye)$/i, '')
+      .replace(/^(bhaiya|anna|boss|kripya|dayavittu|please)\s+/i, '')
       .trim();
 
     if (foodQuery.length >= 1) {

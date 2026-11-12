@@ -204,7 +204,23 @@ const fallbackBrowserTTS = (text, langCode = 'en-IN', onEndCallback = null) => {
 
     const voices = window.speechSynthesis.getVoices();
     if (voices && voices.length > 0) {
-      const matchVoice = voices.find(v => v.lang === langCode || v.lang.startsWith(langCode.slice(0, 2)));
+      // 1. Exact match e.g. 'kn-IN' or 'hi-IN'
+      let matchVoice = voices.find(v => v.lang === langCode || v.lang.replace('_', '-') === langCode);
+      // 2. Language prefix match e.g. 'kn' or 'hi'
+      if (!matchVoice) {
+        matchVoice = voices.find(v => v.lang && v.lang.toLowerCase().startsWith(langCode.slice(0, 2).toLowerCase()));
+      }
+      // 3. Name match for Kannada or Hindi
+      if (!matchVoice && langCode.startsWith('kn')) {
+        matchVoice = voices.find(v => (v.name && v.name.toLowerCase().includes('kannada')) || (v.lang && v.lang.toLowerCase().includes('kn')));
+      }
+      if (!matchVoice && langCode.startsWith('hi')) {
+        matchVoice = voices.find(v => (v.name && v.name.toLowerCase().includes('hindi')) || (v.lang && v.lang.toLowerCase().includes('hi')));
+      }
+      // 4. Indian English voice if regional voice is not installed on OS
+      if (!matchVoice && (langCode.startsWith('kn') || langCode.startsWith('hi'))) {
+        matchVoice = voices.find(v => v.lang === 'en-IN' || (v.name && v.name.toLowerCase().includes('india')));
+      }
       if (matchVoice) {
         utterance.voice = matchVoice;
       }

@@ -38,6 +38,7 @@ import {
   getConversationalResponse 
 } from '../../utils/intentClassifier.js';
 import { useCart } from '../../context/CartContext';
+import { VoiceGuidancePanel } from './VoiceGuidancePanel.jsx';
 
 // True Voice-First Kiosk States
 export const VOICE_STATES = {
@@ -429,6 +430,7 @@ export const KioskVoiceSection = ({
         lastDiscussedDish: lastDiscussedDishRef.current
       });
       setParsedResult(result);
+      const responseLang = result.detectedLanguage || currentLang;
 
       if (result.lastDiscussedDish) {
         setLastDiscussedDish(result.lastDiscussedDish);
@@ -446,7 +448,7 @@ export const KioskVoiceSection = ({
       // Handle Ambiguity Clarification
       if (result.intent === 'ASK_CLARIFICATION' || result.requiresClarification) {
         const clarQuestion = result.response || result.clarificationQuestion;
-        speakAndAutoListen(clarQuestion, currentLang, VOICE_STATES.LISTENING);
+        speakAndAutoListen(clarQuestion, responseLang, VOICE_STATES.LISTENING);
         return;
       }
 
@@ -463,7 +465,7 @@ export const KioskVoiceSection = ({
           }
         }
         const confirmMsg = result.response || "Updated! Would you like anything else?";
-        speakAndAutoListen(confirmMsg, currentLang, currentCandidate.length > 0 ? VOICE_STATES.CONFIRMATION : VOICE_STATES.ASK_MORE);
+        speakAndAutoListen(confirmMsg, responseLang, currentCandidate.length > 0 ? VOICE_STATES.CONFIRMATION : VOICE_STATES.ASK_MORE);
         return;
       }
 
@@ -487,7 +489,7 @@ export const KioskVoiceSection = ({
         }
         const removeMsg = result.response || `Removed ${result.targetItem || 'item'} from your order.`;
         const nextState = (confirmedItemsRef.current.length > 0 || candidateItemsRef.current.length > 0) ? VOICE_STATES.ASK_MORE : VOICE_STATES.IDLE;
-        speakAndAutoListen(removeMsg, currentLang, nextState);
+        speakAndAutoListen(removeMsg, responseLang, nextState);
         return;
       }
 
@@ -499,17 +501,17 @@ export const KioskVoiceSection = ({
           candidateItemsRef.current = itemsToConfirm;
           setIsEditingManually(false);
 
-          const spokenConfirmation = result.response || formatOrderConfirmationPrompt(itemsToConfirm, currentLang);
-          speakAndAutoListen(spokenConfirmation, currentLang, VOICE_STATES.CONFIRMATION);
+          const spokenConfirmation = result.response || formatOrderConfirmationPrompt(itemsToConfirm, responseLang);
+          speakAndAutoListen(spokenConfirmation, responseLang, VOICE_STATES.CONFIRMATION);
         } else {
           const fallbackState = currentConfirmed.length > 0 ? VOICE_STATES.ASK_MORE : VOICE_STATES.ERROR;
           setVoiceState(fallbackState);
           voiceStateRef.current = fallbackState;
 
           const spokenMsg = result.response || (result.unrecognizedItems?.length > 0
-            ? formatUnknownItemPrompt(result.unrecognizedItems, currentLang)
-            : getConversationalResponse(INTENT_TYPES.UNKNOWN, currentLang));
-          speakAndAutoListen(spokenMsg, currentLang, fallbackState);
+            ? formatUnknownItemPrompt(result.unrecognizedItems, responseLang)
+            : getConversationalResponse(INTENT_TYPES.UNKNOWN, responseLang));
+          speakAndAutoListen(spokenMsg, responseLang, fallbackState);
         }
       } else if (result.intent === 'CONFIRM') {
         if (candidateItemsRef.current.length > 0) {
@@ -517,7 +519,7 @@ export const KioskVoiceSection = ({
         } else if (currentConfirmed.length > 0) {
           finalizeSessionAndGoToCart();
         } else {
-          speakAndAutoListen(result.response || langConfig.greeting, currentLang, VOICE_STATES.LISTENING);
+          speakAndAutoListen(result.response || langConfig.greeting, responseLang, VOICE_STATES.LISTENING);
         }
       } else if (result.intent === 'CANCEL' || result.intent === 'MODIFY') {
         if (candidateItemsRef.current.length > 0) {
@@ -525,13 +527,13 @@ export const KioskVoiceSection = ({
         } else if (currentConfirmed.length > 0) {
           finalizeSessionAndGoToCart();
         } else {
-          speakAndAutoListen(result.response || langConfig.askChange, currentLang, VOICE_STATES.IDLE);
+          speakAndAutoListen(result.response || langConfig.askChange, responseLang, VOICE_STATES.IDLE);
         }
       } else if (result.intent === 'FINISH_ORDER') {
         if (currentConfirmed.length > 0) {
           finalizeSessionAndGoToCart();
         } else {
-          speakAndAutoListen(result.response, currentLang, VOICE_STATES.IDLE);
+          speakAndAutoListen(result.response, responseLang, VOICE_STATES.IDLE);
         }
       } else if (result.intent === 'ADD_MORE') {
         requestMoreItems();
@@ -540,7 +542,7 @@ export const KioskVoiceSection = ({
         const returnState = currentConfirmed.length > 0 && currentVoiceState === VOICE_STATES.ASK_MORE
           ? VOICE_STATES.ASK_MORE
           : VOICE_STATES.LISTENING;
-        speakAndAutoListen(result.response || getConversationalResponse(INTENT_TYPES.UNKNOWN, currentLang), currentLang, returnState);
+        speakAndAutoListen(result.response || getConversationalResponse(INTENT_TYPES.UNKNOWN, responseLang), responseLang, returnState);
       }
     } catch (err) {
       console.warn('[KioskVoiceSection] Error during intent parsing:', err);
@@ -1094,6 +1096,18 @@ export const KioskVoiceSection = ({
             </div>
           </div>
         )}
+      </div>
+
+      {/* 2B. CUSTOMER GUIDANCE ACCORDION PANEL */}
+      <div className="kiosk-guidance-container" style={{ maxWidth: '900px', width: '100%', margin: '0 auto 1.5rem auto', padding: '0 1rem' }}>
+        <VoiceGuidancePanel 
+          language={activeLanguage}
+          onSelectPrompt={(promptText) => {
+            setManualInput(promptText);
+            setTranscript(promptText);
+            processUserInput(promptText);
+          }}
+        />
       </div>
 
       {/* 3. SUBTLE BOTTOM FALLBACK TEXT INPUT */}

@@ -23,6 +23,7 @@ import {
   formatOrderConfirmationPrompt,
   formatUnknownItemPrompt
 } from '../utils/multilingualVoiceEngine.js';
+import { detectSpokenLanguage } from '../utils/languageDetector.js';
 
 const API_BASE = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) ||
   (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) ||
@@ -132,7 +133,9 @@ export const executeLocalFallback = ({
   const numMap = {
     'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5, 'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10, 'a': 1, 'an': 1, 'couple': 2,
     'ಒಂದು': 1, 'ಎರಡು': 2, 'ಮೂರು': 3, 'ನಾಲ್ಕು': 4, 'ಐದು': 5, '೧': 1, '೨': 2, '೩': 3, '೪': 4, '೫': 5,
-    'एक': 1, 'दो': 2, 'तीन': 3, 'चार': 4, 'पाँच': 5, 'पांच': 5, '१': 1, '२': 2, '३': 3, '४': 4, '५': 5
+    'ondu': 1, 'eradu': 2, 'mooru': 3, 'naalku': 4, 'aidu': 5,
+    'एक': 1, 'दो': 2, 'तीन': 3, 'चार': 4, 'पाँच': 5, 'पांच': 5, '१': 1, '२': 2, '३': 3, '४': 4, '५': 5,
+    'ek': 1, 'do': 2, 'teen': 3, 'chaar': 4, 'char': 4, 'paanch': 5, 'panch': 5
   };
 
   const synonymMap = {
@@ -226,9 +229,124 @@ export const executeLocalFallback = ({
     };
   }
 
-  // 3. Recommendations
+  // 3. Dietary & Spice Specific Recommendations
+  const isSpiceToken = lower.includes('spice') || lower.includes('spicy') || lower.includes('khara') ||
+    lower.includes('teekha') || lower.includes('tikha') || lower.includes('ಖಾರ') || lower.includes('तीखा');
+
+  const isLowModifier = lower.includes('less') || lower.includes('without') || lower.includes('not') ||
+    lower.includes('no') || lower.includes('low') || lower.includes('mild') || lower.includes('swalpa') ||
+    lower.includes('kam') || lower.includes('kammi') || lower.includes('tumba kammi') ||
+    lower.includes('ಕಮ್ಮಿ') || lower.includes('ಕಡಿಮೆ') || lower.includes('ಇಲ್ಲದ') ||
+    lower.includes('कम') || lower.includes('बिना');
+
+  const isLowSpice = (isSpiceToken && isLowModifier) || lower.includes('mild');
+
+  if (isLowSpice) {
+    const mildOptions = menuItems.filter(m =>
+      m.isAvailable !== false &&
+      (m.dietaryTags?.includes('mild') || !m.dietaryTags?.includes('spicy') ||
+       ['Idli Vada', 'South Indian Filter Coffee', 'Butter Naan', 'Jeera Rice', 'Gulab Jamun (2 Pcs)'].some(n => m.name.toLowerCase().includes(n.toLowerCase())))
+    ).slice(0, 3).map(m => m.name);
+    const mildList = mildOptions.length > 0 ? mildOptions.join(', ') : 'Idli Vada, Butter Naan, Gulab Jamun';
+    const msg = language === 'kn-IN'
+      ? `ಸೌಮ್ಯ ಮತ್ತು ಕಡಿಮೆ ಖಾರದ ತಿನಿಸುಗಳು: ${mildList}. ನೀವು ಯಾವುದನ್ನು ಬಯಸುತ್ತೀರಿ?`
+      : language === 'hi-IN'
+        ? `कम तीखे और सौम्य विकल्प हैं: ${mildList}। आप क्या लेना चाहेंगे?`
+        : `For mild dishes without much spice, I recommend: ${mildList}. Would you like any of these?`;
+    return {
+      success: true,
+      intent: 'RECOMMENDATION',
+      action: 'NONE',
+      items: [],
+      updatedOrder: currentOrder,
+      requiresClarification: false,
+      clarificationQuestion: '',
+      unrecognizedItems: [],
+      lastDiscussedDish,
+      confidence: 0.96,
+      response: msg,
+      provider: 'client_fallback',
+      isFallback: true
+    };
+  }
+
+  const isOrderingPhrase = /^(i want|please give me|give me|can i get|can i have|could i get|could i have|i'd like|i would like|order|add|bring me|get me|we need|ನನಗೆ|ದಯವಿಟ್ಟು|ಕೊಡಿ|ಹಾಕಿ|ಆರ್ಡರ್|मुझे|कृपया|दीजिए|लाओ|लाइए|ऑर्डर)\b/i.test(lower);
+
+  const isVegQuery = !isOrderingPhrase && (
+    lower.includes('vegetarian') || lower.includes('only veg') || lower.includes('pure veg') ||
+    lower.includes('veg options') || lower.includes('veg items') || lower.includes('veg food') ||
+    lower.includes('veg dishes') || lower.includes('शाकाहारी') || lower.includes('ಶಾಕಾಹಾರಿ') ||
+    lower.includes('ವೆಜಿಟೇರಿಯನ್') ||
+    (lower.includes('veg') && (lower.includes('what') || lower.includes('show') || lower.includes('have') || lower.includes('suggest') || lower.includes('ಏನಿದೆ') || lower.includes('क्या') || lower.includes('something')))
+  );
+
+  if (isVegQuery) {
+    const vegOptions = menuItems.filter(m => m.type === 'veg' && m.isAvailable !== false).slice(0, 3).map(m => m.name);
+    const vegList = vegOptions.length > 0 ? vegOptions.join(', ') : 'Masala Dosa, Paneer Butter Masala, Crispy Veg Samosa';
+    const msg = language === 'kn-IN'
+      ? `ನಮ್ಮಲ್ಲಿ ರುಚಿಕರವಾದ ವೆಜಿಟೇರಿಯನ್ ಖಾದ್ಯಗಳು: ${vegList}. ನಿಮಗೆ ಯಾವುದು ಇಷ್ಟ?`
+      : language === 'hi-IN'
+        ? `हमारे लोकप्रिय शाकाहारी व्यंजन हैं: ${vegList}। आप क्या मंगाना चाहेंगे?`
+        : `Here are our popular vegetarian options: ${vegList}. What would you like to try?`;
+    return {
+      success: true,
+      intent: 'RECOMMENDATION',
+      action: 'NONE',
+      items: [],
+      updatedOrder: currentOrder,
+      requiresClarification: false,
+      clarificationQuestion: '',
+      unrecognizedItems: [],
+      lastDiscussedDish,
+      confidence: 0.96,
+      response: msg,
+      provider: 'client_fallback',
+      isFallback: true
+    };
+  }
+
+  // 3b. Contextual Alternatives / Changed Mind
+  const isAlternative = (
+    (lower.includes('changed') && lower.includes('mind')) ||
+    lower.includes('something else') || lower.includes('instead') ||
+    lower.includes('alternative') || lower.includes('different') ||
+    lower.includes('ಬದಲಿಗೆ') || lower.includes('ಬೇರೆ') ||
+    (lower.includes('bere') && (lower.includes('kodi') || lower.includes('thindi') || lower.includes('enu') || lower.includes('beku') || lower.includes('beda'))) ||
+    lower.includes('badalage') || lower.includes('kuch aur') ||
+    lower.includes('kuch alag') || lower.includes('बदलना') || lower.includes('बदले')
+  );
+
+  if (isAlternative) {
+    const altDishes = menuItems.filter(m => m.isAvailable !== false && (!lastDiscussedDish || m.name.toLowerCase() !== lastDiscussedDish.toLowerCase())).slice(0, 3).map(m => m.name);
+    const altList = altDishes.length > 0 ? altDishes.join(', ') : 'Paneer Butter Masala, Veg Dum Biryani, Cold Coffee';
+    const msg = language === 'kn-IN'
+      ? `ಖಂಡಿತ! ಬದಲಿಗೆ ನೀವು ${altList} ಪ್ರಯತ್ನಿಸಬಹುದು. ನಿಮಗೆ ಯಾವುದು ಬೇಕು?`
+      : language === 'hi-IN'
+        ? `बिल्कुल! इसके बजाय आप ${altList} आज़मा सकते हैं। आप क्या लेना चाहेंगे?`
+        : `No problem at all! Instead, you could try ${altList}. What sounds good to you?`;
+    return {
+      success: true,
+      intent: 'MODIFY',
+      action: 'NONE',
+      items: [],
+      updatedOrder: currentOrder,
+      requiresClarification: false,
+      clarificationQuestion: '',
+      unrecognizedItems: [],
+      lastDiscussedDish,
+      confidence: 0.95,
+      response: msg,
+      provider: 'client_fallback',
+      isFallback: true
+    };
+  }
+
+  // 3c. General Recommendations
   if (lower.includes('recommend') || lower.includes('suggest') || lower.includes('special') ||
-      lower.includes('bestseller') || lower.includes('popular') || lower.includes('ಶಿಫಾರಸು') || lower.includes('ವಿಶೇಷ') || lower.includes('सलाह')) {
+      lower.includes('bestseller') || lower.includes('popular') || lower.includes('what should i eat') ||
+      lower.includes('what is good') || lower.includes('confused') || lower.includes('ಏನು ತಿನ್ನಬೇಕು') ||
+      lower.includes('ಶಿಫಾರಸು') || lower.includes('ವಿಶೇಷ') || lower.includes('ಏನು ಚೆನ್ನಾಗಿದೆ') ||
+      lower.includes('सलाह') || lower.includes('क्या खाऊं') || lower.includes('क्या अच्छा है')) {
     const specials = menuItems.filter(m => m.isSpecial && m.isAvailable !== false).slice(0, 3).map(m => m.name);
     const msg = language === 'kn-IN'
       ? `ನಮ್ಮ ಇಂದಿನ ಮುಖ್ಯ ಶೆಫ್ ಸ್ಪೆಷಲ್ಸ್: ${specials.join(', ')}.`
@@ -418,7 +536,82 @@ export const executeLocalFallback = ({
     };
   }
 
-  // 9. Item Removal ("Remove the coffee", "Drop the soup")
+  // 9a. Relative Item Removal ("Remove the last item")
+  const isRemoveLast = lower.includes('last item') || lower.includes('last dish') ||
+    lower.includes('ಕಡೆಯ ಐಟಂ') || lower.includes('ಕೊನೆಯ ಐಟಂ') || lower.includes('ಕೊನೆಯ') ||
+    lower.includes('ಆಖರಿ') || lower.includes('आखिरी') || lower.includes('पिछला') ||
+    lower.includes('aakhri item') || lower.includes('koneya item');
+
+  if (isRemoveLast && currentOrder && currentOrder.length > 0) {
+    const removedItem = currentOrder[currentOrder.length - 1];
+    const updated = currentOrder.slice(0, -1);
+    const dishName = removedItem.name || (removedItem.dish && removedItem.dish.name) || 'item';
+    const msg = language === 'kn-IN'
+      ? `ಸರಿ, ಕಡೆಯ ಐಟಂ ${dishName} ಅನ್ನು ತೆಗೆದುಹಾಕಲಾಗಿದೆ.`
+      : language === 'hi-IN'
+        ? `ज़रूर, मैंने आखिरी आइटम ${dishName} हटा दिया है।`
+        : `Sure, I've removed the last item (${dishName}) from your order.`;
+    return {
+      success: true,
+      intent: 'REMOVE_ITEM',
+      action: 'REMOVE',
+      items: [],
+      updatedOrder: updated,
+      targetItem: dishName,
+      requiresClarification: false,
+      clarificationQuestion: '',
+      unrecognizedItems: [],
+      lastDiscussedDish: dishName,
+      confidence: 0.96,
+      response: msg,
+      provider: 'client_fallback',
+      isFallback: true
+    };
+  }
+
+  // 9b. Relative Increment ("Give me one more", "Innondhu kodi", "Ek aur do")
+  const isRelativeIncrement = lower.includes('one more') || lower.includes('innondhu') ||
+    lower.includes('ಇನ್ನೊಂದು') || lower.includes('ek aur') || lower.includes('एक और') ||
+    lower.includes('aur ek') || lower.includes('another one');
+
+  if (isRelativeIncrement && currentOrder && currentOrder.length > 0) {
+    const targetItem = lastDiscussedDish
+      ? (currentOrder.find(i => (i.name || i.dish?.name || '').toLowerCase().includes(lastDiscussedDish.toLowerCase())) || currentOrder[currentOrder.length - 1])
+      : currentOrder[currentOrder.length - 1];
+    const targetName = targetItem.name || (targetItem.dish && targetItem.dish.name) || 'item';
+    const updated = currentOrder.map(i => {
+      const iName = (i.name || i.dish?.name || '').toLowerCase();
+      if (iName === targetName.toLowerCase()) {
+        const newQty = (i.quantity || 1) + 1;
+        const price = i.price || (i.dish && i.dish.price) || 0;
+        return { ...i, quantity: newQty, subtotal: price * newQty };
+      }
+      return i;
+    });
+    const msg = language === 'kn-IN'
+      ? `ಖಂಡಿತ, ಇನ್ನೊಂದು ${targetName} ಸೇರಿಸಲಾಗಿದೆ.`
+      : language === 'hi-IN'
+        ? `ज़रूर, एक और ${targetName} जोड़ दिया गया है।`
+        : `Certainly, added one more ${targetName}.`;
+    return {
+      success: true,
+      intent: 'MODIFY_QUANTITY',
+      action: 'UPDATE_QUANTITY',
+      items: updated,
+      updatedOrder: updated,
+      targetItem: targetName,
+      requiresClarification: false,
+      clarificationQuestion: '',
+      unrecognizedItems: [],
+      lastDiscussedDish: targetName,
+      confidence: 0.96,
+      response: msg,
+      provider: 'client_fallback',
+      isFallback: true
+    };
+  }
+
+  // 9c. Item Removal ("Remove the coffee", "Drop the soup")
   if (lower.includes('remove') || lower.includes('drop') || lower.includes('delete') ||
       lower.includes("don't want") || lower.includes('ತೆಗೆದುಹಾಕಿ') || lower.includes('हटाओ')) {
     let dishToRemove = findReferencedDish(lower);
@@ -643,6 +836,8 @@ export const parseVoiceIntent = async ({
   timeoutMs = DEFAULT_TIMEOUT_MS
 }) => {
   const trimmed = (text || '').trim();
+  const effectiveLanguage = detectSpokenLanguage(trimmed, language);
+
   if (!trimmed) {
     return {
       success: false,
@@ -655,7 +850,7 @@ export const parseVoiceIntent = async ({
       unrecognizedItems: [],
       lastDiscussedDish,
       confidence: 0,
-      response: getConversationalResponse(INTENT_TYPES.UNKNOWN, language),
+      response: getConversationalResponse(INTENT_TYPES.UNKNOWN, effectiveLanguage),
       provider: 'client_fallback',
       isFallback: true
     };
@@ -668,7 +863,7 @@ export const parseVoiceIntent = async ({
 
     const payload = {
       text: trimmed,
-      language: language,
+      language: effectiveLanguage,
       menu: [], // Backend automatically fetches active MongoDB dishes and KnowledgeDocs
       conversationHistory: conversationHistory || [],
       currentOrder: (currentOrder || []).map(i => ({
@@ -703,6 +898,15 @@ export const parseVoiceIntent = async ({
         const rawUpdatedOrder = Array.isArray(backendData.updatedOrder) ? backendData.updatedOrder : [];
         const { verifiedItems: verifiedUpdatedOrder } = groundDishesWithActiveMenu(rawUpdatedOrder, menuItems);
 
+        let finalUpdatedOrder = currentOrder;
+        if (Array.isArray(backendData.updatedOrder)) {
+          if (backendData.action === 'CLEAR' || backendData.action === 'REMOVE') {
+            finalUpdatedOrder = verifiedUpdatedOrder;
+          } else if (verifiedUpdatedOrder.length > 0) {
+            finalUpdatedOrder = verifiedUpdatedOrder;
+          }
+        }
+
         // Combine backend unrecognized items with any ungrounded items
         const combinedUnrecognized = Array.from(new Set([
           ...(Array.isArray(backendData.unrecognizedItems) ? backendData.unrecognizedItems : []),
@@ -712,9 +916,9 @@ export const parseVoiceIntent = async ({
         // Determine natural response
         let finalResponse = backendData.response || '';
         if (verifiedItems.length > 0 && !finalResponse) {
-          finalResponse = formatOrderConfirmationPrompt(verifiedItems, language);
+          finalResponse = formatOrderConfirmationPrompt(verifiedItems, effectiveLanguage);
         } else if (combinedUnrecognized.length > 0 && backendData.intent === 'ORDER' && !finalResponse) {
-          finalResponse = formatUnknownItemPrompt(combinedUnrecognized, language);
+          finalResponse = formatUnknownItemPrompt(combinedUnrecognized, effectiveLanguage);
         }
 
         return {
@@ -722,7 +926,7 @@ export const parseVoiceIntent = async ({
           intent: backendData.intent || 'UNKNOWN',
           action: backendData.action || 'NONE',
           items: verifiedItems,
-          updatedOrder: verifiedUpdatedOrder.length > 0 ? verifiedUpdatedOrder : (backendData.action === 'CLEAR' ? [] : currentOrder),
+          updatedOrder: finalUpdatedOrder,
           targetItem: backendData.targetItem || null,
           requiresClarification: Boolean(backendData.requiresClarification),
           clarificationQuestion: backendData.clarificationQuestion || '',
@@ -731,7 +935,8 @@ export const parseVoiceIntent = async ({
           confidence: Number(backendData.confidence) || 0.95,
           response: finalResponse,
           provider: backendData.provider || 'gemini_ai',
-          isFallback: Boolean(backendData.provider === 'gemini_ai_fallback')
+          isFallback: Boolean(backendData.provider === 'gemini_ai_fallback'),
+          detectedLanguage: effectiveLanguage
         };
       }
     }
@@ -742,7 +947,7 @@ export const parseVoiceIntent = async ({
   // 2. Offline / Server Unavailable / Timeout Fallback
   return executeLocalFallback({
     text: trimmed,
-    language,
+    language: effectiveLanguage,
     menuItems,
     context,
     conversationHistory,
