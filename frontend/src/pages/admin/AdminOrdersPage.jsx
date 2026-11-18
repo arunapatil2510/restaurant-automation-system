@@ -13,7 +13,7 @@ export const AdminOrdersPage = () => {
   const fetchOrders = async (showLoading = false) => {
     if (showLoading) setLoading(true);
     try {
-      const data = await getOrders({ status: statusFilter });
+      const data = await getOrders();
       setOrders(data);
       setError(null);
     } catch (err) {
@@ -27,7 +27,7 @@ export const AdminOrdersPage = () => {
   // Initial load
   useEffect(() => {
     fetchOrders(true);
-  }, [statusFilter]);
+  }, []);
 
   // Periodic polling every 4 seconds for live restaurant table orders
   useEffect(() => {
@@ -35,7 +35,7 @@ export const AdminOrdersPage = () => {
       fetchOrders(false);
     }, 4000);
     return () => clearInterval(interval);
-  }, [statusFilter]);
+  }, []);
 
   const handleStatusChange = async (orderId, newStatus) => {
     setUpdatingId(orderId);
@@ -56,6 +56,12 @@ export const AdminOrdersPage = () => {
     const date = new Date(dateStr);
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
+
+  const cancelledCount = orders.filter((order) => order.orderStatus === 'cancelled').length;
+
+  const displayedOrders = statusFilter === 'all'
+    ? orders
+    : orders.filter((order) => order.orderStatus === statusFilter);
 
   return (
     <div className="admin-page-container">
@@ -115,6 +121,12 @@ export const AdminOrdersPage = () => {
             >
               Completed
             </button>
+            <button
+              className={`filter-chip ${statusFilter === 'cancelled' ? 'active' : ''}`}
+              onClick={() => setStatusFilter('cancelled')}
+            >
+              Cancelled ({cancelledCount})
+            </button>
           </div>
           <span className="admin-count-tag">Live Polling (4s sync)</span>
         </div>
@@ -143,7 +155,7 @@ export const AdminOrdersPage = () => {
                     <p>Loading real-time orders from MongoDB...</p>
                   </td>
                 </tr>
-              ) : orders.length === 0 ? (
+              ) : displayedOrders.length === 0 ? (
                 <tr>
                   <td colSpan="9" style={{ textAlign: 'center', padding: '2.5rem' }}>
                     <ShoppingBag size={32} style={{ color: 'var(--text-tertiary)', margin: '0 auto 0.5rem' }} />
@@ -151,7 +163,7 @@ export const AdminOrdersPage = () => {
                   </td>
                 </tr>
               ) : (
-                orders.map((order) => (
+                displayedOrders.map((order) => (
                   <tr key={order._id || order.orderNumber}>
                     <td>
                       <strong>{order.orderNumber}</strong>

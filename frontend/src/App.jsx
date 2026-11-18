@@ -19,7 +19,6 @@ import { AdminLoginPage } from './pages/admin/AdminLoginPage';
 import { AdminOverviewPage } from './pages/admin/AdminOverviewPage';
 import { AdminMenuPage } from './pages/admin/AdminMenuPage';
 import { AdminOrdersPage } from './pages/admin/AdminOrdersPage';
-import { AdminReservationsPage } from './pages/admin/AdminReservationsPage';
 import { AdminOffersPage } from './pages/admin/AdminOffersPage';
 import { AdminKitchenPage } from './pages/admin/AdminKitchenPage';
 
@@ -66,7 +65,6 @@ function App() {
               <Route index element={<AdminOverviewPage />} />
               <Route path="menu" element={<AdminMenuPage />} />
               <Route path="orders" element={<AdminOrdersPage />} />
-              <Route path="reservations" element={<AdminReservationsPage />} />
               <Route path="offers" element={<AdminOffersPage />} />
               <Route path="kitchen" element={<AdminKitchenPage />} />
             </Route>

@@ -191,9 +191,27 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// Mapping from Order status to KitchenOrder status
+const ORDER_TO_KITCHEN_STATUS = {
+  new: 'Pending',
+  preparing: 'Preparing',
+  ready: 'Ready',
+  completed: 'Completed',
+  cancelled: 'Cancelled',
+};
+
+// Allowed forward transitions from Live Orders dashboard
+const ALLOWED_ORDER_TRANSITIONS = {
+  new: ['preparing', 'ready', 'completed', 'cancelled'],
+  preparing: ['ready', 'completed', 'cancelled'],
+  ready: ['completed', 'cancelled'],
+  completed: [], // Terminal status
+  cancelled: [], // Terminal status
+};
+
 /**
  * @route   PATCH /api/orders/:id/status
- * @desc    Update order status (new, preparing, ready, completed, cancelled)
+ * @desc    Update order status (new, preparing, ready, completed, cancelled) and sync with KitchenOrder
  * @access  Staff
  */
 router.patch('/:id/status', async (req, res) => {
@@ -209,34 +227,201 @@ router.patch('/:id/status', async (req, res) => {
       });
     }
 
-    const updateFields = {};
-    if (orderStatus) {
-      updateFields.orderStatus = orderStatus.toLowerCase();
+    const cleanId = id?.trim();
+    let existingOrder = null;
+    if (cleanId.match(/^[0-9a-fA-F]{24}$/)) {
+      existingOrder = await Order.findById(cleanId);
     }
-    if (paymentStatus) {
-      updateFields.paymentStatus = paymentStatus.toLowerCase();
-    }
-
-    let updatedOrder = null;
-    if (id.match(/^[0-9a-fA-F]{24}$/)) {
-      updatedOrder = await Order.findByIdAndUpdate(id, updateFields, { new: true });
+    if (!existingOrder) {
+      existingOrder = await Order.findOne({ orderNumber: cleanId.toUpperCase() });
     }
 
-    if (!updatedOrder) {
-      updatedOrder = await Order.findOneAndUpdate(
-        { orderNumber: id.toUpperCase().trim() },
-        updateFields,
-        { new: true }
-      );
-    }
-
-    if (!updatedOrder) {
+    if (!existingOrder) {
       return res.status(404).json({
         success: false,
         message: `Order not found with identifier '${id}'.`,
       });
     }
 
+    // 1. Payment-only update: preserve order status and do not touch KitchenOrder
+    if (!orderStatus) {
+      if (paymentStatus) {
+        existingOrder.paymentStatus = paymentStatus.toLowerCase();
+        await existingOrder.save();
+      }
+      return res.status(200).json({
+        success: true,
+        message: `Order #${existingOrder.orderNumber} payment status updated to '${existingOrder.paymentStatus}'.`,
+        data: existingOrder,
+      });
+    }
+
+    const targetStatus = orderStatus.toLowerCase();
+    const previousOrderStatus = existingOrder.orderStatus;
+
+    // 2. Fetch matching KitchenOrder (if one exists)
+    const kitchenOrder = await KitchenOrder.findOne({ orderId: existingOrder.orderNumber });
+
+    // 3. Prevent reopening cancelled orders
+    if (previousOrderStatus === 'cancelled' && targetStatus !== 'cancelled') {
+      return res.status(409).json({
+        success: false,
+        message: `Order #${existingOrder.orderNumber} is cancelled and cannot be reopened to '${targetStatus}'.`,
+      });
+    }
+
+    // 4. Prevent reopening completed orders
+    if (previousOrderStatus === 'completed' && targetStatus !== 'completed') {
+      return res.status(409).json({
+        success: false,
+        message: `Order #${existingOrder.orderNumber} is completed and cannot be transitioned to '${targetStatus}'.`,
+      });
+    }
+
+    // 5. Prevent cancelling if main Order OR KitchenOrder is already Completed
+    if (targetStatus === 'cancelled') {
+      if (previousOrderStatus === 'completed') {
+        return res.status(409).json({
+          success: false,
+          message: `Cannot cancel Order #${existingOrder.orderNumber} because it is already completed.`,
+        });
+      }
+      if (kitchenOrder && kitchenOrder.status === 'Completed') {
+        return res.status(409).json({
+          success: false,
+          message: `Cannot cancel Order #${existingOrder.orderNumber} because its kitchen preparation is already Completed.`,
+        });
+      }
+    }
+
+    // 6. Idempotent repeated cancellation or repeated status update
+    if (previousOrderStatus === targetStatus) {
+      if (paymentStatus) {
+        existingOrder.paymentStatus = paymentStatus.toLowerCase();
+        await existingOrder.save();
+      }
+
+      // Reconcile KitchenOrder if target is cancelled and kitchen ticket is not yet Cancelled (never overwrite Completed)
+      if (targetStatus === 'cancelled' && kitchenOrder) {
+        if (kitchenOrder.status === 'Completed') {
+          return res.status(409).json({
+            success: false,
+            message: `Cannot reconcile Order #${existingOrder.orderNumber}: Kitchen ticket is already Completed.`,
+          });
+        }
+        if (kitchenOrder.status !== 'Cancelled') {
+          await KitchenOrder.findOneAndUpdate(
+            { orderId: existingOrder.orderNumber, status: kitchenOrder.status },
+            { $set: { status: 'Cancelled' } }
+          );
+        }
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: `Order #${existingOrder.orderNumber} is already in status '${targetStatus}'.`,
+        data: existingOrder,
+      });
+    }
+
+    // 7. Validate that current Order and KitchenOrder agree before ordinary transitions
+    if (targetStatus !== 'cancelled' && kitchenOrder) {
+      const expectedKitchenStatus = ORDER_TO_KITCHEN_STATUS[previousOrderStatus];
+      if (kitchenOrder.status !== expectedKitchenStatus) {
+        return res.status(409).json({
+          success: false,
+          message: `Status inconsistency detected: Order #${existingOrder.orderNumber} is '${previousOrderStatus}' but KitchenOrder is '${kitchenOrder.status}' (expected '${expectedKitchenStatus}').`,
+        });
+      }
+    }
+
+    // 8. Enforce forward-only status transitions
+    const validTransitions = ALLOWED_ORDER_TRANSITIONS[previousOrderStatus] || [];
+    if (!validTransitions.includes(targetStatus)) {
+      return res.status(409).json({
+        success: false,
+        message: `Invalid status transition: Cannot change Order #${existingOrder.orderNumber} from '${previousOrderStatus}' to '${targetStatus}'.`,
+      });
+    }
+
+    const previousKitchenStatus = kitchenOrder ? kitchenOrder.status : null;
+    const targetKitchenStatus = ORDER_TO_KITCHEN_STATUS[targetStatus];
+
+    const updateFields = { orderStatus: targetStatus };
+    if (paymentStatus) {
+      updateFields.paymentStatus = paymentStatus.toLowerCase();
+    }
+
+    // 9. Atomically update Order with optimistic concurrency guard
+    const updatedOrder = await Order.findOneAndUpdate(
+      {
+        _id: existingOrder._id,
+        orderStatus: previousOrderStatus,
+      },
+      { $set: updateFields },
+      { new: true }
+    );
+
+    if (!updatedOrder) {
+      return res.status(409).json({
+        success: false,
+        message: `Order #${existingOrder.orderNumber} was modified concurrently. Please refresh and retry.`,
+      });
+    }
+
+    // 10. Conditionally update KitchenOrder if it exists (do NOT create one if missing)
+    if (kitchenOrder) {
+      let updatedKitchenOrder = null;
+      try {
+        updatedKitchenOrder = await KitchenOrder.findOneAndUpdate(
+          {
+            orderId: existingOrder.orderNumber,
+            status: previousKitchenStatus,
+          },
+          { $set: { status: targetKitchenStatus } },
+          { new: true, runValidators: true }
+        );
+
+        if (!updatedKitchenOrder) {
+          // KitchenOrder was modified concurrently by another request
+          // Compensating rollback on Order
+          const rollbackResult = await Order.findOneAndUpdate(
+            { _id: updatedOrder._id, orderStatus: targetStatus },
+            { $set: { orderStatus: previousOrderStatus } }
+          );
+
+          if (!rollbackResult) {
+            console.error(`[SYNC_RECONCILIATION_ALERT] Rollback failed: Order #${updatedOrder.orderNumber} status was altered concurrently during conflict resolution.`);
+          }
+
+          return res.status(409).json({
+            success: false,
+            message: `Kitchen order for #${existingOrder.orderNumber} was modified concurrently. Order update was rolled back.`,
+          });
+        }
+      } catch (kitchenErr) {
+        console.error(`[SYNC_ERROR] Failed to update KitchenOrder for #${existingOrder.orderNumber}:`, kitchenErr.message);
+        // Compensating rollback on Order
+        try {
+          const rollbackResult = await Order.findOneAndUpdate(
+            { _id: updatedOrder._id, orderStatus: targetStatus },
+            { $set: { orderStatus: previousOrderStatus } }
+          );
+
+          if (!rollbackResult) {
+            console.error(`[SYNC_RECONCILIATION_ALERT] Rollback failed: Order #${updatedOrder.orderNumber} status was altered concurrently after KitchenOrder error.`);
+          }
+        } catch (rollbackErr) {
+          console.error(`[SYNC_RECONCILIATION_ALERT] Rollback threw error for Order #${updatedOrder.orderNumber}:`, rollbackErr.message);
+        }
+
+        throw kitchenErr;
+      }
+    } else {
+      console.warn(`[Order Status Sync] No KitchenOrder found for Order #${existingOrder.orderNumber}. Skipping kitchen synchronization.`);
+    }
+
+    // 11. Return updated Order maintaining API response contract
     res.status(200).json({
       success: true,
       message: `Order #${updatedOrder.orderNumber} status updated to '${updatedOrder.orderStatus}'.`,

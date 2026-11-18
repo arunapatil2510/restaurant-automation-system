@@ -8,7 +8,7 @@ A next-generation **Self-Service Restaurant Ordering Kiosk** (inspired by modern
 - **Strict Menu Grounding & Quantity Extraction**: Automatically extracts quantities, dishes, and customizations (spice levels, Jain, etc.) strictly grounded against the active kitchen database.
 - **Voice State Machine & Confirmation**: Real-time listening equalizer, confirmation prompts with Text-to-Speech (TTS) voice playback, manual quantity tweaking, and voice confirmation ("Yes, confirm").
 - **Complete Touchscreen Fallback**: Seamless category navigation, popular specials grid, and custom modifier selection for customers who prefer touch.
-- **End-to-End Kitchen & Admin Pipeline**: Real-time 3-stage Kitchen Display System (KDS), Admin Dashboard (Orders, Menu, Offers, Reservations), and Cart / Checkout flow.
+- **End-to-End Kitchen & Admin Pipeline**: Real-time 3-stage Kitchen Display System (KDS), Admin Dashboard (Orders, Menu, Offers), and Cart / Checkout flow.
 
 ---
 

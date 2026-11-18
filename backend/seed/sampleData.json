@@ -319,7 +319,7 @@
     {
       "title": "Restaurant Timings, Location & Contact",
       "category": "timing",
-      "content": "RESTOSMART is located at MG Road, Bengaluru, Karnataka 560001. We are open 7 days a week from 11:00 AM to 11:00 PM. Dine-in kitchen orders close at 10:30 PM. For inquiries or table reservations, call +91 9876543210 or email info@restosmart.com.",
+      "content": "RESTOSMART is located at MG Road, Bengaluru, Karnataka 560001. We are open 7 days a week from 11:00 AM to 11:00 PM. Dine-in kitchen orders close at 10:30 PM. For general inquiries, call +91 9876543210 or email info@restosmart.com.",
       "keywords": ["timing", "hours", "location", "address", "phone", "contact", "open", "close"]
     },
     {
@@ -335,10 +335,10 @@
       "keywords": ["allergy", "allergens", "nuts", "dairy", "lactose", "ghee", "halal", "non-veg separate"]
     },
     {
-      "title": "Table Seating, QR Ordering & Reservation Policy",
+      "title": "Table Seating & QR Ordering Policy",
       "category": "policy",
-      "content": "Each table is equipped with a dedicated QR code (e.g. Table 1 to 20). Scanning the code immediately binds your orders to your table number. Customers can also book tables in advance for up to 20 guests via our Reservation page. Reserved tables are held for up to 15 minutes past the booking time slot.",
-      "keywords": ["qr", "table", "reservation", "booking", "seating", "wait time", "policy"]
+      "content": "Each table is equipped with a dedicated QR code (e.g. Table 1 to 20). Scanning the code immediately binds your orders to your table number. Dining seating is walk-in on a first-come, first-served basis. Table reservations are not required or accepted.",
+      "keywords": ["qr", "table", "ordering", "seating", "walk-in", "policy"]
     }
   ]
 }

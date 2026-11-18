@@ -4,7 +4,6 @@ import {
   LayoutDashboard, 
   UtensilsCrossed, 
   ShoppingBag, 
-  CalendarCheck, 
   Tag, 
   ChefHat, 
   ArrowRight,
@@ -23,7 +22,6 @@ export const AdminOverviewPage = () => {
     { title: 'Total Menu Dishes', value: menuItems.length, icon: <UtensilsCrossed size={22} />, color: '#16a34a', bg: '#dcfce7', link: '/admin/menu' },
     { title: 'In-Stock Dishes', value: menuItems.filter(i => i.isAvailable !== false).length, icon: <Sparkles size={22} />, color: '#0284c7', bg: '#e0f2fe', link: '/admin/menu' },
     { title: 'Active Promo Codes', value: offers.length, icon: <Tag size={22} />, color: '#ea580c', bg: '#ffedd5', link: '/admin/offers' },
-    { title: 'Tables Managed', value: '20 Tables', icon: <CalendarCheck size={22} />, color: '#9333ea', bg: '#f3e8ff', link: '/admin/reservations' },
   ];
 
   const quickModules = [
@@ -40,13 +38,6 @@ export const AdminOverviewPage = () => {
       icon: <ShoppingBag size={24} />,
       link: '/admin/orders',
       badge: 'Live'
-    },
-    {
-      title: 'Table Reservations',
-      desc: 'Manage customer table booking requests, dates, and party size confirmations.',
-      icon: <CalendarCheck size={24} />,
-      link: '/admin/reservations',
-      badge: 'Bookings'
     },
     {
       title: 'Kitchen Display (KDS)',
