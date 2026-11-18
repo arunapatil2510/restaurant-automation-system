@@ -4,7 +4,7 @@ Smarter Dining. Better Experience. A clean, responsive, and lightweight Restaura
 - **Digital Menu & Table QR Ordering** (`/menu?table=7`)
 - **Voice-Based Food Ordering** (Web Speech API + Smart Parser)
 - **Grounded AI Dining Concierge** (Gemini AI RAG assistant)
-- **Table Reservation & Offers Manager**
+- **Offers & Promotions Manager**
 - **4-Column Kitchen Display System (KDS)**
 - **Admin Management Dashboard**
 

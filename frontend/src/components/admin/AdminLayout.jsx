@@ -4,7 +4,6 @@ import {
   LayoutDashboard, 
   UtensilsCrossed, 
   ShoppingBag, 
-  CalendarCheck, 
   Tag, 
   ChefHat, 
   LogOut, 
@@ -29,7 +28,6 @@ export const AdminLayout = () => {
     { path: '/admin', label: 'Overview', icon: <LayoutDashboard size={18} />, end: true },
     { path: '/admin/menu', label: 'Menu Manager', icon: <UtensilsCrossed size={18} /> },
     { path: '/admin/orders', label: 'Live Orders', icon: <ShoppingBag size={18} /> },
-    { path: '/admin/reservations', label: 'Reservations', icon: <CalendarCheck size={18} /> },
     { path: '/admin/offers', label: 'Offers & Promos', icon: <Tag size={18} /> },
     { path: '/admin/kitchen', label: 'Kitchen KDS', icon: <ChefHat size={18} /> },
   ];
