@@ -270,6 +270,80 @@ export const executeLocalFallback = ({
     };
   }
 
+  // 3a. Budget / Price Filter Queries ("under 150 rupees", "below 100", "₹150 ಒಳಗೆ", "150 रुपये से कम")
+  let budget = null;
+  const bm1 = lower.match(/(under|below|less than|within|ಒಳಗೆ|से कम|कम)\s*₹?\s*(\d+)/i);
+  const bm2 = lower.match(/(\d+)\s*(rupees|rs|bucks|ರೂಪಾಯಿ|रुपये)?\s*(under|below|ಒಳಗೆ|से कम|कम|mein|me|alli|ನಲ್ಲಿ)/i);
+  if (bm1) budget = parseInt(bm1[2], 10);
+  else if (bm2) budget = parseInt(bm2[1], 10);
+
+  if (budget && !isNaN(budget) && budget > 0 && (lower.includes('what') || lower.includes('show') || lower.includes('give') || lower.includes('have') || lower.includes('options') || lower.includes('suggest') || lower.includes('get') || lower.includes('food') || lower.includes('ತಿಂಡಿ') || lower.includes('ಏನಿದೆ') || lower.includes('मिलेगा') || lower.includes('है') || lower.includes('kuch') || lower.includes('dish'))) {
+    const affordable = menuItems.filter(m => m.price <= budget && m.isAvailable !== false).slice(0, 4);
+    if (affordable.length > 0) {
+      const dishList = affordable.map(m => `${m.name} (₹${m.price})`).join(', ');
+      const msg = language === 'kn-IN'
+        ? `₹${budget} ಒಳಗೆ ಲಭ್ಯವಿರುವ ತಿಂಡಿಗಳು: ${dishList}. ನಿಮಗೆ ಯಾವುದು ಬೇಕು?`
+        : language === 'hi-IN'
+          ? `₹${budget} के अंदर उपलब्ध व्यंजन हैं: ${dishList}। आप क्या पसंद करेंगे?`
+          : `Under ₹${budget}, you can get: ${dishList}. Would you like to order any of these?`;
+      return {
+        success: true,
+        intent: 'RECOMMENDATION',
+        action: 'NONE',
+        items: [],
+        updatedOrder: currentOrder,
+        requiresClarification: false,
+        clarificationQuestion: '',
+        unrecognizedItems: [],
+        lastDiscussedDish,
+        confidence: 0.95,
+        response: msg,
+        provider: 'client_fallback',
+        isFallback: true
+      };
+    }
+  }
+
+  // 3b. Ingredient Exclusion / Jain Queries ("without onion", "no garlic", "jain", "ಈರುಳ್ಳಿ ಇಲ್ಲದ", "बिना प्याज")
+  const isExclusionQuery = (
+    lower.includes('without onion') || lower.includes('no onion') ||
+    lower.includes('without garlic') || lower.includes('no garlic') ||
+    lower.includes('jain') || lower.includes('bina pyaz') || lower.includes('bina lahsun') ||
+    lower.includes('बिना प्याज') || lower.includes('बिना लहसुन') || lower.includes('जैन') ||
+    lower.includes('ಈರುಳ್ಳಿ ಇಲ್ಲ') || lower.includes('ಬೆಳ್ಳುಳ್ಳಿ ಇಲ್ಲ') || lower.includes('ಈರುಳ್ಳಿ ಇಲ್ಲದೆ')
+  );
+  if (isExclusionQuery) {
+    const noOnionOptions = menuItems.filter(m => {
+      if (m.isAvailable === false) return false;
+      const ing = (m.ingredients || []).map(i => i.toLowerCase());
+      const hasOnionGarlic = ing.some(i => i.includes('onion') || i.includes('garlic'));
+      return !hasOnionGarlic && (m.categorySlug === 'beverages' || m.categorySlug === 'desserts' || ['idli', 'dosa', 'rice'].some(k => m.name.toLowerCase().includes(k)));
+    }).slice(0, 3);
+    const dishList = noOnionOptions.length > 0
+      ? noOnionOptions.map(m => m.name).join(', ')
+      : 'Idli Vada, South Indian Filter Coffee, Gulab Jamun';
+    const msg = language === 'kn-IN'
+      ? `ಈರುಳ್ಳಿ/ಬೆಳ್ಳುಳ್ಳಿ ಇಲ್ಲದ ಆಯ್ಕೆಗಳು: ${dishList}. ನಿಮಗೆ ಯಾವುದು ಬೇಕು?`
+      : language === 'hi-IN'
+        ? `बिना प्याज और लहसुन के उपलब्ध विकल्प हैं: ${dishList}। आप क्या लेना चाहेंगे?`
+        : `Dishes prepared without onion or garlic include: ${dishList}. What would you like to have?`;
+    return {
+      success: true,
+      intent: 'RECOMMENDATION',
+      action: 'NONE',
+      items: [],
+      updatedOrder: currentOrder,
+      requiresClarification: false,
+      clarificationQuestion: '',
+      unrecognizedItems: [],
+      lastDiscussedDish,
+      confidence: 0.95,
+      response: msg,
+      provider: 'client_fallback',
+      isFallback: true
+    };
+  }
+
   const isOrderingPhrase = /^(i want|please give me|give me|can i get|can i have|could i get|could i have|i'd like|i would like|order|add|bring me|get me|we need|ನನಗೆ|ದಯವಿಟ್ಟು|ಕೊಡಿ|ಹಾಕಿ|ಆರ್ಡರ್|मुझे|कृपया|दीजिए|लाओ|लाइए|ऑर्डर)\b/i.test(lower);
 
   const isVegQuery = !isOrderingPhrase && (
@@ -343,7 +417,7 @@ export const executeLocalFallback = ({
 
   // 3c. General Recommendations
   if (lower.includes('recommend') || lower.includes('suggest') || lower.includes('special') ||
-      lower.includes('bestseller') || lower.includes('popular') || lower.includes('what should i eat') ||
+      lower.includes('bestseller') || lower.includes('best selling') || lower.includes('best-selling') || lower.includes('best seller') || lower.includes('popular') || lower.includes('what should i eat') ||
       lower.includes('what is good') || lower.includes('confused') || lower.includes('ಏನು ತಿನ್ನಬೇಕು') ||
       lower.includes('ಶಿಫಾರಸು') || lower.includes('ವಿಶೇಷ') || lower.includes('ಏನು ಚೆನ್ನಾಗಿದೆ') ||
       lower.includes('सलाह') || lower.includes('क्या खाऊं') || lower.includes('क्या अच्छा है')) {
@@ -494,9 +568,9 @@ export const executeLocalFallback = ({
   }
 
   // 7b. Finish Order / "That's all"
-  if (lower.includes("that's all") || lower.includes("thats all") || lower.includes("nothing else") ||
-      lower.includes("no more") || lower.includes("done") || lower.includes("ಇಷ್ಟೇ") ||
-      lower.includes("ಅಷ್ಟೇ") || lower.includes("बस इतना") || lower.includes("और कुछ नहीं") ||
+  if (lower.includes("that is all") || lower.includes("that's all") || lower.includes("thats all") || lower.includes("nothing else") ||
+      lower.includes("nothing more") || lower.includes("no more") || lower.includes("done") || lower.includes("all done") || lower.includes("ಇಷ್ಟೇ") ||
+      lower.includes("ಅಷ್ಟೇ") || lower.includes("ಸಾಕು") || lower.includes("बस इतना") || lower.includes("और कुछ नहीं") || lower.includes("बस") ||
       (context === 'ASK_MORE' && (isNegative(clean) || lower.includes('no')))) {
     return {
       success: true,

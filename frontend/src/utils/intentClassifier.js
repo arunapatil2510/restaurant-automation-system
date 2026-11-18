@@ -146,11 +146,11 @@ export const isAffirmative = (clean = '') => {
 
 export const isNegative = (clean = '') => {
   return CANCEL_PATTERNS.some(regex => regex.test(clean)) ||
-    /^(no|nope|nothing|nothing else|no thanks|no more|thats all|that's all|done|finish|finished|checkout|go to cart|view cart|all done|i am done|im done|stop|cancel)\b/i.test(clean) ||
+    /^(no|nope|nothing|nothing else|no thanks|no more|that is all|thats all|that's all|done|finish|finished|checkout|go to cart|view cart|all done|i am done|im done|stop|cancel)\b/i.test(clean) ||
     /^(ಬೇಡ|ರದ್ದು|ತಪ್ಪು|ಮತ್ತೆ|ಇನ್ನೇನು ಬೇಡ|ಸಾಕು|ಅಷ್ಟೇ|ಮುಗಿಯಿತು)/i.test(clean) ||
     /^(नहीं|रद्द|गलत|वापस|कैंसिल|मत करो|हटाओ|कुछ नहीं|और नहीं|बस|काफी है)/i.test(clean) ||
     clean.includes('change it') || clean.includes('ಬದಲಾಯಿಸಿ') || clean.includes('ಬದಲಿಸಿ') || clean.includes('बदलो') || clean.includes('बदल') ||
-    clean === 'no' || clean === 'nahi' || clean === 'beda' || clean === 'saaku' || clean === 'bas' || clean === 'kuch nahi';
+    clean === 'no' || clean === 'nahi' || clean === 'beda' || clean === 'saaku' || clean === 'bas' || clean === 'kuch nahi' || clean === 'that is all';
 };
 
 /**

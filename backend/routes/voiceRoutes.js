@@ -368,6 +368,78 @@ const buildGroundedFallbackResponse = (
     };
   }
 
+  // 2.6 BUDGET / PRICE FILTER QUERIES ("Under 150 rupees", "Below 100", "₹150 ಒಳಗೆ", "150 रुपये से कम")
+  let budget = null;
+  const bm1 = lower.match(/(under|below|less than|within|ಒಳಗೆ|से कम|कम)\s*₹?\s*(\d+)/i);
+  const bm2 = lower.match(/(\d+)\s*(rupees|rs|bucks|ರೂಪಾಯಿ|रुपये)?\s*(under|below|ಒಳಗೆ|से कम|कम|mein|me|alli|ನಲ್ಲಿ)/i);
+  if (bm1) budget = parseInt(bm1[2], 10);
+  else if (bm2) budget = parseInt(bm2[1], 10);
+
+  if (budget && !isNaN(budget) && budget > 0 && (lower.includes('what') || lower.includes('show') || lower.includes('give') || lower.includes('have') || lower.includes('options') || lower.includes('suggest') || lower.includes('get') || lower.includes('food') || lower.includes('ತಿಂಡಿ') || lower.includes('ಏನಿದೆ') || lower.includes('मिलेगा') || lower.includes('है') || lower.includes('kuch') || lower.includes('dish'))) {
+    const affordable = menuItems.filter(m => m.price <= budget && m.isAvailable !== false).slice(0, 4);
+    if (affordable.length > 0) {
+      const dishList = affordable.map(m => `${m.name} (₹${m.price})`).join(', ');
+      const msg = activeLang === 'kn-IN'
+        ? `₹${budget} ಒಳಗೆ ಲಭ್ಯವಿರುವ ತಿಂಡಿಗಳು: ${dishList}. ನಿಮಗೆ ಯಾವುದು ಬೇಕು?`
+        : activeLang === 'hi-IN'
+          ? `₹${budget} के अंदर उपलब्ध व्यंजन हैं: ${dishList}। आप क्या पसंद करेंगे?`
+          : `Under ₹${budget}, you can get: ${dishList}. Would you like to order any of these?`;
+      return {
+        success: true,
+        intent: 'RECOMMENDATION',
+        action: 'NONE',
+        items: [],
+        updatedOrder: currentOrder,
+        requiresClarification: false,
+        clarificationQuestion: '',
+        unrecognizedItems: [],
+        lastDiscussedDish,
+        confidence: 0.95,
+        response: msg,
+        provider: 'gemini_ai_fallback'
+      };
+    }
+  }
+
+  // 2.7 INGREDIENT EXCLUSION / JAIN QUERIES ("without onion", "no garlic", "jain", "ಈರುಳ್ಳಿ ಇಲ್ಲದ", "बिना प्याज")
+  const isExclusionQuery = (
+    lower.includes('without onion') || lower.includes('no onion') ||
+    lower.includes('without garlic') || lower.includes('no garlic') ||
+    lower.includes('jain') || lower.includes('bina pyaz') || lower.includes('bina lahsun') ||
+    lower.includes('बिना प्याज') || lower.includes('बिना लहसुन') || lower.includes('जैन') ||
+    lower.includes('ಈರುಳ್ಳಿ ಇಲ್ಲ') || lower.includes('ಬೆಳ್ಳುಳ್ಳಿ ಇಲ್ಲ') || lower.includes('ಈರುಳ್ಳಿ ಇಲ್ಲದೆ')
+  );
+  if (isExclusionQuery) {
+    const noOnionOptions = menuItems.filter(m => {
+      if (m.isAvailable === false) return false;
+      const ing = (m.ingredients || []).map(i => i.toLowerCase());
+      const hasOnionGarlic = ing.some(i => i.includes('onion') || i.includes('garlic'));
+      return !hasOnionGarlic && (m.categorySlug === 'beverages' || m.categorySlug === 'desserts' || ['idli', 'dosa', 'rice'].some(k => m.name.toLowerCase().includes(k)));
+    }).slice(0, 3);
+    const dishList = noOnionOptions.length > 0
+      ? noOnionOptions.map(m => m.name).join(', ')
+      : 'Idli Vada, South Indian Filter Coffee, Gulab Jamun';
+    const msg = activeLang === 'kn-IN'
+      ? `ಈರುಳ್ಳಿ/ಬೆಳ್ಳುಳ್ಳಿ ಇಲ್ಲದ ಆಯ್ಕೆಗಳು: ${dishList}. ನಿಮಗೆ ಯಾವುದು ಬೇಕು?`
+      : activeLang === 'hi-IN'
+        ? `बिना प्याज और लहसुन के उपलब्ध विकल्प हैं: ${dishList}। आप क्या लेना चाहेंगे?`
+        : `Dishes prepared without onion or garlic include: ${dishList}. What would you like to have?`;
+    return {
+      success: true,
+      intent: 'RECOMMENDATION',
+      action: 'NONE',
+      items: [],
+      updatedOrder: currentOrder,
+      requiresClarification: false,
+      clarificationQuestion: '',
+      unrecognizedItems: [],
+      lastDiscussedDish,
+      confidence: 0.95,
+      response: msg,
+      provider: 'gemini_ai_fallback'
+    };
+  }
+
   // 3. MENU QUERY (What is available / Categories / Dietary / Low Spice)
   if (lower.includes('what do you have') || lower.includes('show menu') || lower.includes('what is available') ||
       lower.includes('menu options') || lower.includes('categories') || lower.includes('what drinks') ||
@@ -518,7 +590,7 @@ const buildGroundedFallbackResponse = (
 
   // 6. RECOMMENDATIONS (Natural queries: "What should I eat?", "Suggest something nice", "I'm confused", etc.)
   if (lower.includes('recommend') || lower.includes('suggest') || lower.includes('special') ||
-      lower.includes('bestseller') || lower.includes('popular') || lower.includes('what should i') ||
+      lower.includes('bestseller') || lower.includes('best selling') || lower.includes('best-selling') || lower.includes('best seller') || lower.includes('popular') || lower.includes('what should i') ||
       lower.includes('suggest something') || lower.includes('what is good') || lower.includes('confused') || lower.includes('what to eat') ||
       lower.includes('ಶಿಫಾರಸು') || lower.includes('ಸ್ಪೆಷಲ್') || lower.includes('ಸೂಚಿಸಿ') || lower.includes('ತಿನ್ನಲು') ||
       lower.includes('ಒಳ್ಳೆಯದನ್ನು') || lower.includes('ಚೆನ್ನಾಗಿದೆ') || lower.includes('ಗೊಂದಲ') || lower.includes('ಯಾವುದು ತಗೋಳಿ') ||
@@ -564,10 +636,11 @@ const buildGroundedFallbackResponse = (
     };
   }
 
-  // 7. CONFIRM ("Yes", "Confirm", "Proceed", "Place order")
+  // 7. CONFIRM ("Yes", "Confirm", "Proceed", "Place order", "That is all")
   if (/^(yes|confirm|correct|proceed|okay|ok|done|place order|add it|add them|yes please|sure|yep|yeah)\b/i.test(lower) ||
-      /^(ಹೌದು|ಸರಿ|ಖಚಿತ|ಆರ್ಡರ್ ಮಾಡಿ|ಖಚಿತಪಡಿಸಿ|ಆಯಿತು|ಹಾ)/i.test(lower) ||
-      /^(हाँ|हाँजी|हाँ जी|कन्फर्म|सही है|ऑर्डर करो|ठीक है|हाँ ठीक है|हां)/i.test(lower)) {
+      lower.includes("that is all") || lower.includes("that's all") || lower.includes("thats all") || lower.includes("nothing else") || lower.includes("nothing more") || lower.includes("all done") ||
+      /^(ಹೌದು|ಸರಿ|ಖಚಿತ|ಆರ್ಡರ್ ಮಾಡಿ|ಖಚಿತಪಡಿಸಿ|ಆಯಿತು|ಹಾ|ಅಷ್ಟೇ|ಇಷ್ಟೇ|ಸಾಕು)/i.test(lower) ||
+      /^(हाँ|हाँजी|हाँ जी|कन्फर्म|सही है|ऑर्डर करो|ठीक है|हाँ ठीक है|हां|बस|बस इतना|और कुछ नहीं)/i.test(lower)) {
     const msg = activeLang === 'kn-IN'
       ? 'ನಿಮ್ಮ ಆರ್ಡರ್ ದೃಢೀಕರಿಸಲಾಗಿದೆ. ಕಾರ್ಟ್‌ಗೆ ಕರೆದೊಯ್ಯಲಾಗುತ್ತಿದೆ.'
       : activeLang === 'hi-IN'
@@ -1112,7 +1185,9 @@ CONVERSATIONAL & GROUNDING RULES:
 5. QUANTITY CHANGES: If customer says "actually make that three" and the target dish is unambiguous, set intent to "MODIFY_QUANTITY", action to "UPDATE_QUANTITY", and update the quantity in "updatedOrder".
 6. ITEM REMOVAL: If customer says "remove the coffee" or "drop the soup", set intent to "REMOVE_ITEM", action to "REMOVE", and remove that dish from "updatedOrder".
 7. INGREDIENTS & ALLERGENS: Answer truthfully using menu ingredients and dietary tags. If not listed, state that kitchen staff can confirm.
-8. NATURAL LANGUAGE RESPONSES: Respond naturally in the customer's selected language (${language === 'kn-IN' ? 'Kannada (ಕನ್ನಡ)' : language === 'hi-IN' ? 'Hindi (हिन्दी)' : 'English'}). Be polite, friendly, and helpful like a real waiter. Avoid robotic boilerplate.
+8. BUDGET INQUIRIES: If customer asks what is available under a certain price (e.g. 'under 150 rupees', 'below 100', '150 ರೂಪಾಯಿ ಒಳಗೆ', '150 रुपये से कम'), set intent to 'RECOMMENDATION', recommend dishes from the active menu where price <= budget with prices, in customer's language.
+9. INGREDIENT EXCLUSIONS & JAIN: If customer asks for dishes without a specific ingredient (e.g. 'without onion', 'no garlic', 'jain food', 'ಈರುಳ್ಳಿ ಇಲ್ಲದ', 'बिना प्याज'), set intent to 'RECOMMENDATION', recommend dishes that do not contain those ingredients.
+10. NATURAL LANGUAGE RESPONSES: Respond naturally in the customer's selected language (${language === 'kn-IN' ? 'Kannada (ಕನ್ನಡ)' : language === 'hi-IN' ? 'Hindi (हिन्दी)' : 'English'}). Be polite, friendly, and helpful like a real waiter. Avoid robotic boilerplate.
 
 STRUCTURED INTENTS:
 - "GREETING", "MENU_QUERY", "ITEM_QUERY", "PRICE_QUERY", "INGREDIENT_QUERY", "RECOMMENDATION", "ORDER", "ADD_ITEM", "MODIFY_QUANTITY", "REMOVE_ITEM", "MODIFY_CUSTOMIZATION", "CONFIRM", "CANCEL", "ASK_CLARIFICATION", "HELP", "UNKNOWN"
